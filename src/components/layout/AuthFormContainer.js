@@ -4,7 +4,7 @@ import Logo from '../common/Logo';
 const AuthFormContainer = ({ title, children, footerLink, setPage }) => (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black">
         <div className="w-full max-w-sm p-8">
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 cursor-pointer" onClick={() => setPage('home')}>
                 <Logo />
             </div>
             <h1 className="text-2xl font-semibold text-center text-white mb-6">{title}</h1>

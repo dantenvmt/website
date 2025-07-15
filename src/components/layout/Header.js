@@ -6,7 +6,9 @@ import { PrimaryButton } from '../common/Button';
 const Header = ({ currentPage, setPage }) => (
     <header className="absolute top-0 left-0 right-0 z-10 bg-black/50 backdrop-blur-sm">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-            <Logo />
+            <div className="cursor-pointer" onClick={() => setPage('home')}>
+                <Logo />
+            </div>
             <nav className="hidden md:flex items-center space-x-8">
                 <NavLink page="home" currentPage={currentPage} setPage={setPage}>Home</NavLink>
                 <NavLink page="about" currentPage={currentPage} setPage={setPage}>About</NavLink>

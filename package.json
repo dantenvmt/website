@@ -2,6 +2,7 @@
   "name": "my-app",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://dantenvmt.github.io/website",
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
     "@testing-library/dom": "^10.4.0",
@@ -41,5 +42,4 @@
       "last 1 safari version"
     ]
   },
-  "homepage": "https://dantenvmt.github.io/website"
 }

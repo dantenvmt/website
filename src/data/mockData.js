@@ -13,9 +13,9 @@ export const subNavLinks = {
     research: {
         title: 'Research',
         links: [
-            { id: 'research-index', title: 'Research Index' },
-            { id: 'research-overview', title: 'Research Overview' },
-            { id: 'research-residency', title: 'Research Residency' },
+            { id: 'index', title: 'Research Index' },
+            { id: 'overview', title: 'Research Overview' },
+            { id: 'residency', title: 'Research Residency' },
         ],
         sections: [
             {

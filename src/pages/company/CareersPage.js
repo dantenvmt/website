@@ -1,6 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const CareersPage = () => {
+    const navigate = useNavigate();
+
+    const handleNavigate = () => {
+        navigate('/company/career/search');
+    };
     return (
         // Tgit gc --prune=nowhis is the main page container for padding
         <div className="p-8 md:p-12">
@@ -9,7 +15,7 @@ const CareersPage = () => {
             <div className="max-w-3xl mx-auto text-center mb-24">
                 <h1 className="text-5xl md:text-7xl font-bold mb-4">Develop safe, beneficial AI systems</h1>
                 <p className="text-neutral-300">We're looking for curious minds from a wide range of disciplines and backgrounds.</p>
-                <button className="mt-6 bg-white text-black font-semibold py-2 px-5 rounded-full hover:bg-neutral-200 transition-colors">
+                <button onClick={handleNavigate} className="mt-6 bg-white text-black font-semibold py-2 px-5 rounded-full hover:bg-neutral-200 transition-colors">
                     View open roles
                 </button>
             </div>

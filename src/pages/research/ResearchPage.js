@@ -1,5 +1,5 @@
 import React from 'react';
-import { researchArticles } from '../data/researchData'; // Import the new data
+import { researchArticles } from '../../data/researchData'; // Import the new data
 
 const ResearchPage = () => {
     return (

@@ -1,19 +1,40 @@
 import React from 'react';
-
+import { Link } from 'react-router-dom';
 // --- Reusable Sub-Components for Footer ---
 
-const FooterLink = ({ href = "#", children }) => (
-    <a href={href} className="text-neutral-400 hover:text-white text-sm transition-colors">
+const FooterLink = ({ href = "#", page, subPage, setPage, setActiveSubPage, children }) => (
+    <a
+        href={href}
+        onClick={(e) => {
+            e.preventDefault();
+            if (page && setPage) {
+                setPage(page);
+                if (setActiveSubPage) {
+                    // Set the active sub-page, defaulting to null if not provided
+                    setActiveSubPage(subPage || null);
+                }
+            }
+        }}
+        className="text-neutral-400 hover:text-white text-sm transition-colors cursor-pointer"
+    >
         {children}
     </a>
 );
 
-const FooterColumn = ({ title, links }) => (
+const FooterColumn = ({ title, links, setPage, setActiveSubPage }) => (
     <div>
         <h4 className="font-semibold text-white mb-4 text-sm">{title}</h4>
         <div className="flex flex-col space-y-3">
             {links.map((link, index) => (
-                <FooterLink key={index}>{link}</FooterLink>
+                <FooterLink
+                    key={index}
+                    page={link.page}
+                    subPage={link.subPage}
+                    setPage={setPage}
+                    setActiveSubPage={setActiveSubPage}
+                >
+                    {link.text}
+                </FooterLink>
             ))}
         </div>
     </div>
@@ -27,7 +48,7 @@ const SocialIcon = ({ href = "#", children }) => (
 
 // --- Main Footer Component ---
 
-const Footer = () => {
+const Footer = ({ setPage, setActiveSubPage }) => {
     const footerData = {
         research: { title: 'Our Research', links: ['Research Index', 'Research Overview', 'Research Residency'] },
         latest: { title: 'Latest Advancements', links: ['OpenAI o3', 'OpenAI o4-mini', 'GPT-4o', 'GPT-4.5', 'Sora'] },
@@ -36,11 +57,26 @@ const Footer = () => {
         sora: { title: 'Sora', links: ['Sora Overview', 'Features', 'Pricing', 'Sora log in'] },
         apiPlatform: { title: 'API Platform', links: ['Platform Overview', 'Pricing', 'API log in', 'Documentation', 'Developer Forum'] },
         forBusiness: { title: 'For Business', links: ['Business Overview', 'Solutions', 'Contact Sales'] },
-        company: { title: 'Company', links: ['About Us', 'Our Charter', 'Careers', 'Brand'] },
+        company: {
+            title: 'Company',
+            links: [
+                { text: 'About Us', page: 'company', subPage: 'about-us' },
+                { text: 'Our Charter', page: 'company', subPage: 'our-charter' },
+                { text: 'Careers', page: 'company', subPage: 'careers' },
+                { text: 'Brand' }
+            ]
+        },
         support: { title: 'Support', links: ['Help Center'] },
         more: { title: 'More', links: ['News', 'Stories', 'Livestreams', 'Podcast'] },
         terms: { title: 'Terms & Policies', links: ['Terms of Use', 'Privacy Policy', 'Other Policies'] },
     };
+
+    // Standardize all links to be objects for consistent handling
+    for (const key in footerData) {
+        footerData[key].links = footerData[key].links.map(link =>
+            typeof link === 'string' ? { text: link } : link
+        );
+    }
 
     return (
         // The `border-t` class has been removed from this footer element.
@@ -49,27 +85,27 @@ const Footer = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
                     {/* Column Generation */}
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.research} />
-                        <FooterColumn {...footerData.latest} />
+                        <FooterColumn {...footerData.research} setPage={setPage} setActiveSubPage={setActiveSubPage} />
+                        <FooterColumn {...footerData.latest} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.safety} />
+                        <FooterColumn {...footerData.safety} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.chatGPT} />
+                        <FooterColumn {...footerData.chatGPT} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.sora} />
-                        <FooterColumn {...footerData.apiPlatform} />
+                        <FooterColumn {...footerData.sora} setPage={setPage} setActiveSubPage={setActiveSubPage} />
+                        <FooterColumn {...footerData.apiPlatform} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.forBusiness} />
-                        <FooterColumn {...footerData.company} />
+                        <FooterColumn {...footerData.forBusiness} setPage={setPage} setActiveSubPage={setActiveSubPage} />
+                        <FooterColumn {...footerData.company} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                     <div className="space-y-8">
-                        <FooterColumn {...footerData.support} />
-                        <FooterColumn {...footerData.more} />
-                        <FooterColumn {...footerData.terms} />
+                        <FooterColumn {...footerData.support} setPage={setPage} setActiveSubPage={setActiveSubPage} />
+                        <FooterColumn {...footerData.more} setPage={setPage} setActiveSubPage={setActiveSubPage} />
+                        <FooterColumn {...footerData.terms} setPage={setPage} setActiveSubPage={setActiveSubPage} />
                     </div>
                 </div>
 

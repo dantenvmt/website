@@ -36,7 +36,7 @@ export const subNavLinks = {
             { id: 'about-us', title: 'About Us' },
             { id: 'our-charter', title: 'Our Charter' },
             { id: 'careers', title: 'Careers' },
-            { id: 'brand-guidelines', title: 'Brand Guidelines' },
+            { id: 'contact', title: 'Contact Us' },
         ]
     }
 };

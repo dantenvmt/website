@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockNews } from '../data/mockData'; // Import the mockNews data
+import { mockNews } from '../../data/mockData'; // Import the mockNews data
 
 const AboutPage = () => {
     return (

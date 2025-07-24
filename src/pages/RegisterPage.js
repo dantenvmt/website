@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthFormContainer from '../components/layout/AuthFormContainer';
+import { useAuth } from '../context/AuthContext';
 
 const RegisterPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const { login } = useAuth(); // Use login from context to update state
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
         try {
-            const response = await fetch('/api/auth/register', {
+            // ✅ Use the live Render URL
+            const response = await fetch('https://renaisons-api.onrender.com/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -25,8 +28,8 @@ const RegisterPage = () => {
                 throw new Error(data.msg || 'Failed to register');
             }
 
-            // On successful registration, save token and redirect
-            localStorage.setItem('token', data.token);
+            // On successful registration, log the user in and redirect
+            login(data.token);
             navigate('/'); // Redirect to homepage
         } catch (err) {
             setError(err.message);

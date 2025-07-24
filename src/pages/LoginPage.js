@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthFormContainer from '../components/layout/AuthFormContainer';
-import { useAuth } from '../context/AuthContext'; // ✅ Import useAuth
+import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
 
 const LoginPage = () => {
@@ -9,13 +9,14 @@ const LoginPage = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const { login } = useAuth(); // ✅ Get the login function from context
+    const { login } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         try {
-            const response = await fetch('/api/auth/login', {
+            // ✅ Use the live Render URL
+            const response = await fetch('https://renaisons-api.onrender.com/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -25,10 +26,8 @@ const LoginPage = () => {
                 throw new Error(data.msg || 'Failed to log in');
             }
 
-            // ✅ Use the context's login function
             login(data.token);
 
-            // Redirect based on role
             const decodedToken = jwtDecode(data.token);
             if (decodedToken.user.role === 'admin') {
                 navigate('/admin');
@@ -39,7 +38,7 @@ const LoginPage = () => {
             setError(err.message);
         }
     };
-    // ... (keep the rest of the JSX the same)
+
     return (
         <AuthFormContainer title="Welcome back">
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -56,4 +55,5 @@ const LoginPage = () => {
         </AuthFormContainer>
     );
 };
+
 export default LoginPage;

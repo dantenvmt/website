@@ -56,7 +56,7 @@ const CareerSearchPage = () => {
         const fetchJobs = async () => {
             try {
                 // Fetch data from your backend API
-                const response = await fetch('/api/jobs');
+                const response = await fetch('https://renaisons-api.onrender.com/api/jobs');
                 const data = await response.json();
                 setAllJobs(data); // Store the original list of jobs
             } catch (error) {

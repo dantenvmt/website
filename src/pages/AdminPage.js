@@ -22,81 +22,40 @@ const AdminPage = () => {
     const navigate = useNavigate();
 
     // --- Data Fetching ---
+    const API_URL = 'https://renaisons-api.onrender.com'; // ✅ Central API URL
+
     const fetchJobs = async () => {
         try {
-            const response = await fetch('/api/jobs');
+            const response = await fetch(`${API_URL}/api/jobs`);
             const data = await response.json();
             setJobs(data);
-        } catch (error) {
-            console.error('Failed to fetch jobs:', error);
-        }
+        } catch (error) { console.error('Failed to fetch jobs:', error); }
     };
 
-
-    // ✅ Function to fetch all users
     const fetchUsers = async () => {
         const token = localStorage.getItem('token');
-        if (!token) return; // Don't fetch if no token
-
+        if (!token) return;
         try {
-            const response = await fetch('/api/users', {
-                headers: {
-                    'x-auth-token': token, // This endpoint is protected
-                },
+            const response = await fetch(`${API_URL}/api/users`, {
+                headers: { 'x-auth-token': token },
             });
             const data = await response.json();
-            if (response.ok) {
-                setUsers(data);
-            } else {
-                console.error('Failed to fetch users:', data.msg);
-            }
-        } catch (error) {
-            console.error('Failed to fetch users:', error);
-        }
+            if (response.ok) setUsers(data);
+            else console.error('Failed to fetch users:', data.msg);
+        } catch (error) { console.error('Failed to fetch users:', error); }
     };
-    // ✅ Handler for adding a new user
-    const handleAddUser = async (e) => {
-        e.preventDefault();
-        const token = localStorage.getItem('token');
-        const newUser = { email: newUserEmail, password: newUserPassword, role: newUserRole };
 
-        try {
-            const response = await fetch('/api/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-auth-token': token,
-                },
-                body: JSON.stringify(newUser),
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                alert('User created successfully!');
-                setNewUserEmail('');
-                setNewUserPassword('');
-                setNewUserRole('user');
-                fetchUsers(); // Refresh the user list
-            } else {
-                alert(`Failed to add user: ${data.msg}`);
-            }
-        } catch (error) {
-            console.error('Error creating user:', error);
-        }
-    };
-    // Fetch all data when the component loads
     useEffect(() => {
         fetchJobs();
         fetchUsers();
     }, []);
 
-    // --- Job Handlers ---
     const handleAddJob = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
         const newJob = { title: newTitle, department: newDepartment, location: newLocation, description: newDescription };
         try {
-            const response = await fetch('/api/jobs', {
+            const response = await fetch(`${API_URL}/api/jobs`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
                 body: JSON.stringify(newJob),
@@ -112,29 +71,24 @@ const AdminPage = () => {
         const token = localStorage.getItem('token');
         if (window.confirm('Are you sure?')) {
             try {
-                const response = await fetch(`/api/jobs/${jobId}`, {
+                const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
                     method: 'DELETE',
                     headers: { 'x-auth-token': token },
                 });
-                if (response.ok) { fetchJobs(); }
-                else { alert('Failed to delete job.'); }
+                if (response.ok) fetchJobs();
+                else alert('Failed to delete job.');
             } catch (error) { console.error('Error deleting job:', error); }
         }
-    };
-
-    const handleEditClick = (job) => {
-        setCurrentJob(job);
-        setIsEditing(true);
     };
 
     const handleUpdateJob = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
         try {
-            const response = await fetch(`/api/jobs/${currentJob._id}`, {
+            const response = await fetch(`${API_URL}/api/jobs/${currentJob._id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-                body: JSON.stringify(currentJob), // Send the whole currentJob object
+                body: JSON.stringify(currentJob),
             });
             if (response.ok) {
                 setIsEditing(false); setCurrentJob(null); fetchJobs();
@@ -142,11 +96,28 @@ const AdminPage = () => {
         } catch (error) { console.error('Error updating job:', error); }
     };
 
-    // --- Logout Handler ---
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/login');
+    const handleAddUser = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+        const newUser = { email: newUserEmail, password: newUserPassword, role: newUserRole };
+        try {
+            const response = await fetch(`${API_URL}/api/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+                body: JSON.stringify(newUser),
+            });
+            const data = await response.json();
+            if (response.ok) {
+                alert('User created successfully!');
+                setNewUserEmail(''); setNewUserPassword(''); setNewUserRole('user');
+                fetchUsers();
+            } else { alert(`Failed to add user: ${data.msg}`); }
+        } catch (error) { console.error('Error creating user:', error); }
     };
+
+    const handleEditClick = (job) => { setCurrentJob(job); setIsEditing(true); };
+    const handleLogout = () => { localStorage.removeItem('token'); navigate('/login'); };
+
 
     return (
         <div className="bg-neutral-900 text-white min-h-screen p-8">

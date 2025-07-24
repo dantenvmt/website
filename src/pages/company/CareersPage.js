@@ -5,7 +5,7 @@ const CareersPage = () => {
     const navigate = useNavigate();
 
     const handleNavigate = () => {
-        navigate('/company/career/search');
+        navigate('/company/careers/search');
     };
     return (
         // Tgit gc --prune=nowhis is the main page container for padding

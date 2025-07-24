@@ -1,19 +1,22 @@
 import React from 'react';
-import Logo from '../common/Logo';
+import { Link } from 'react-router-dom';
 
-const AuthFormContainer = ({ title, children, footerLink, setPage }) => (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black">
-        <div className="w-full max-w-sm p-8">
-            <div className="text-center mb-8 cursor-pointer" onClick={() => setPage('home')}>
-                <Logo />
+const AuthFormContainer = ({ title, children }) => {
+    return (
+        <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen p-4">
+            <div className="w-full max-w-sm">
+                <div className="text-center mb-8">
+                    <Link to="/">
+                        <img src="/logo.png" alt="Logo" className="h-10 mx-auto" />
+                    </Link>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-8">
+                    <h1 className="text-2xl font-bold text-center mb-6">{title}</h1>
+                    {children}
+                </div>
             </div>
-            <h1 className="text-2xl font-semibold text-center text-white mb-6">{title}</h1>
-            {children}
-            <p className="text-center text-sm text-neutral-400 mt-8">
-                {footerLink.text} <a href="#" onClick={(e) => { e.preventDefault(); setPage(footerLink.page); }} className="font-medium text-[#00A67E] hover:underline">{footerLink.linkText}</a>
-            </p>
         </div>
-    </div>
-);
+    );
+};
 
 export default AuthFormContainer;

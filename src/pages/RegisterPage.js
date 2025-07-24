@@ -1,28 +1,53 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import AuthFormContainer from '../components/layout/AuthFormContainer';
-import { PrimaryButton, SocialButton } from '../components/common/Button';
 
-const RegisterPage = ({ setPage }) => (
-    <AuthFormContainer
-        title="Create an account"
-        footerLink={{ text: "Already have an account?", linkText: "Log in", page: 'login' }}
-        setPage={setPage}
-    >
-        <form className="space-y-4">
-            <input type="email" placeholder="Email address" required className="w-full bg-neutral-900 border border-neutral-700 text-white placeholder-neutral-500 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-[#00A67E]" />
-            <PrimaryButton className="w-full">Continue</PrimaryButton>
-        </form>
-        <div className="my-6 flex items-center">
-            <div className="flex-grow border-t border-neutral-700"></div>
-            <span className="flex-shrink mx-4 text-neutral-500 text-sm">OR</span>
-            <div className="flex-grow border-t border-neutral-700"></div>
-        </div>
-        <div className="space-y-3">
-            <SocialButton>Continue with Google</SocialButton>
-            <SocialButton>Continue with Microsoft</SocialButton>
-            <SocialButton>Continue with Apple</SocialButton>
-        </div>
-    </AuthFormContainer>
-);
+const RegisterPage = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+
+        try {
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.msg || 'Failed to register');
+            }
+
+            // On successful registration, save token and redirect
+            localStorage.setItem('token', data.token);
+            navigate('/'); // Redirect to homepage
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    return (
+        <AuthFormContainer title="Create your account">
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-neutral-700 p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full bg-neutral-700 p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-md transition">
+                    Continue
+                </button>
+                <p className="text-center text-sm text-neutral-400">
+                    Already have an account? <Link to="/login" className="font-semibold text-blue-500 hover:underline">Log in</Link>
+                </p>
+            </form>
+        </AuthFormContainer>
+    );
+};
 
 export default RegisterPage;

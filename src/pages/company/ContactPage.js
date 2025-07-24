@@ -14,21 +14,6 @@ const FormInput = ({ label, type = 'text', name, required = false }) => (
     </div>
 );
 
-const FormSelect = ({ label, name, options, required = false }) => (
-    <div>
-        <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
-            {label}{required && <span className="text-red-500">*</span>}
-        </label>
-        <select
-            id={name}
-            name={name}
-            className="w-full bg-black border border-neutral-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-            <option>Please Select</option>
-            {options.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-    </div>
-);
 
 const FormTextarea = ({ label, name, required = false }) => (
     <div>

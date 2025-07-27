@@ -15,7 +15,6 @@ const LoginPage = () => {
         e.preventDefault();
         setError('');
         try {
-            // ✅ Use the live Render URL
             const response = await fetch('https://renaisons-api.onrender.com/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -22,7 +22,7 @@ const AdminPage = () => {
     const navigate = useNavigate();
 
     // --- Data Fetching ---
-    const API_URL = 'https://renaisons-api.onrender.com'; // ✅ Central API URL
+    const API_URL = 'https://renaisons-api.onrender.com';
 
     const fetchJobs = async () => {
         try {
@@ -131,7 +131,7 @@ const AdminPage = () => {
                 <div className="bg-neutral-800 p-6 rounded-lg mb-12">
                     <h2 className="text-2xl font-semibold mb-4">User Management ({users.length})</h2>
 
-                    {/* ✅ Add User Form */}
+                    {/* Add User Form */}
                     <form onSubmit={handleAddUser} className="mb-6 p-4 bg-neutral-900 rounded-md">
                         <h3 className="text-lg font-semibold mb-3">Create New User</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -188,7 +188,6 @@ const AdminPage = () => {
                     </div>
                 </div>
 
-                {/* Edit Job Modal */}
                 {isEditing && currentJob && (
                     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
                         <div className="bg-neutral-800 p-8 rounded-lg w-full max-w-lg">

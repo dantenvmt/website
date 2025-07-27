@@ -8,14 +8,13 @@ const RegisterPage = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const { login } = useAuth(); // Use login from context to update state
+    const { login } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
         try {
-            // ✅ Use the live Render URL
             const response = await fetch('https://renaisons-api.onrender.com/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -28,9 +27,8 @@ const RegisterPage = () => {
                 throw new Error(data.msg || 'Failed to register');
             }
 
-            // On successful registration, log the user in and redirect
             login(data.token);
-            navigate('/'); // Redirect to homepage
+            navigate('/');
         } catch (err) {
             setError(err.message);
         }

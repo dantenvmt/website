@@ -1,12 +1,11 @@
 
 export const navLinks = [
     { id: 'home', title: 'Home' },
-    { id: 'research', title: 'Research' },
-    { id: 'safety', title: 'Safety' },
-    { id: 'business', title: 'For Business' },
-    { id: 'chatgpt', title: 'ChatGPT' },
-    { id: 'stories', title: 'Stories' },
+    { id: 'resume_optimization', title: 'Resume Optimization' },
+    { id: 'job_board', title: 'Job Board' },
     { id: 'company', title: 'Company' },
+    { id: 'faq', title: 'FAQ' },
+
 ];
 
 export const subNavLinks = {
@@ -28,15 +27,13 @@ export const subNavLinks = {
             }
         ]
     },
-    // You can add other sub-navigation items here following the same structure
-    // safety: { title: 'Safety', links: [...], sections: [...] },
     company: {
         title: 'Company',
         links: [
             { id: 'about-us', title: 'About Us' },
-            { id: 'our-charter', title: 'Our Charter' },
             { id: 'careers', title: 'Careers' },
             { id: 'contact', title: 'Contact Us' },
+            { id: 'terms-and-privacy', title: 'Terms & Privacy' },
         ]
     }
 };
@@ -50,7 +47,7 @@ export const mockNews = [
 export const mockStories = [
     { title: 'Lyndon Barrois & Sora', category: 'Sora', date: 'Dec 4, 2024', imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800' },
     { title: 'Creating nail art with ChatGPT', category: 'ChatGPT', date: 'Feb 6, 2024', imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800' },
-    { title: 'Economics and reasoning with OpenAI of', category: 'ChatGPT', date: 'Sep 12, 2024', imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800' },
+    { title: 'Economics and reasoning with Renaisons', category: 'ChatGPT', date: 'Sep 12, 2024', imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800' },
 ];
 export const latestResearch = [
     {

@@ -33,7 +33,7 @@ const BackArrowIcon = () => (
 
 const NavHeader = ({ isNavOpen, onToggle }) => (
     <div className={`flex items-center mb-6 ${isNavOpen ? 'justify-between' : 'justify-center'}`}>
-        {isNavOpen && <img src="/logo.png" alt="Logo" className="h-8" />}
+        {isNavOpen && <img src="/logoa.png" alt="Logo" className="h-8" />}
         <button onClick={onToggle} className="p-1 rounded-md hover:bg-neutral-800">
             {isNavOpen ? <ToggleIconOpen /> : <ToggleIconClosed />}
         </button>
@@ -67,7 +67,6 @@ const SubNavPanel = ({ subNavData, onBack, handleSubNavClick, activeSubPage, par
         </button>
 
         <nav className="flex flex-col space-y-2">
-            {/* Render the main links */}
             {subNavData.links.map(link => (
                 <Link
                     key={link.id}
@@ -79,7 +78,6 @@ const SubNavPanel = ({ subNavData, onBack, handleSubNavClick, activeSubPage, par
                 </Link>
             ))}
 
-            {/* ✅ FIX: Add logic to render the subsections */}
             {subNavData.sections && subNavData.sections.map((section, index) => (
                 <div key={index} className="pt-4 mt-2 border-t border-neutral-800">
                     <h3 className="px-3 mb-2 text-xs font-semibold uppercase text-neutral-500 tracking-wider">{section.title}</h3>
@@ -107,7 +105,6 @@ const SideNav = ({ isNavOpen, setIsNavOpen }) => {
     const handleNavClick = (link) => {
         if (subNavLinks[link.id]) {
             setActiveSubNav(link.id);
-            // Set the first link as active by default
             setActiveSubPage(subNavLinks[link.id].links[0].id);
         } else {
             setActiveSubNav(null);

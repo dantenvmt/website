@@ -1,6 +1,5 @@
 import React from 'react';
 import { mockNews, mockStories, latestResearch } from '../data/mockData';
-import Footer from '../components/layout/Footer';
 
 const HomePage = ({ setPage, setActiveSubPage }) => {
     return (
@@ -116,7 +115,7 @@ const HomePage = ({ setPage, setActiveSubPage }) => {
                 <div className="mt-24">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold">Latest research</h2>
-                        <a href="#" className="text-sm font-semibold hover:underline">View all</a>
+                        <a href="research/index" className="text-sm font-semibold hover:underline">View all</a>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {latestResearch.map((item) => (
@@ -132,7 +131,6 @@ const HomePage = ({ setPage, setActiveSubPage }) => {
                 </div>
 
             </div>
-            <Footer setPage={setPage} setActiveSubPage={setActiveSubPage} />
         </>
     );
 };

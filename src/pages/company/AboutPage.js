@@ -1,9 +1,7 @@
 import React from 'react';
-import { mockNews } from '../../data/mockData'; // Import the mockNews data
-
+import { mockNews } from '../../data/mockData';
 const AboutPage = () => {
     return (
-        // This container centers the content and sets a max-width
         <div className="max-w-7xl mx-auto p-8 md:p-12">
             <h1 className="text-4xl font-bold text-center mb-12">About</h1>
 
@@ -68,7 +66,6 @@ const AboutPage = () => {
                     ))}
                 </div>
             </div>
-
         </div>
     );
 };

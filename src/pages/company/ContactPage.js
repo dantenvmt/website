@@ -40,7 +40,7 @@ const ContactPage = () => {
         <div className="max-w-4xl mx-auto p-8 md:p-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">Contact Us</h1>
             <p className="text-neutral-400 mb-12">
-                Get in touch with our team to learn more about <a href="index.js" className="text-white underline hover:no-underline">Renaisons</a>.
+                Get in touch with our team to learn more about <a href="about-us" className="text-white underline hover:no-underline">Renaisons</a>.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -71,9 +71,6 @@ const ContactPage = () => {
                 </div>
             </form>
 
-            <p className="text-neutral-400 mt-12">
-                For other inquiries, visit our <a href="#" className="text-white underline hover:no-underline">help center</a>.
-            </p>
         </div>
     );
 };

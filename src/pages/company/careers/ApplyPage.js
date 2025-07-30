@@ -1,20 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
+
 
 const FormInput = ({ label, name, type = "text", value, onChange, required = false }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
             {label} {required && <span className="text-red-500">*</span>}
         </label>
-        <input
-            type={type}
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            required={required}
-            className="w-full bg-black border border-neutral-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-        />
+        <input type={type} id={name} name={name} value={value} onChange={onChange} required={required} className="w-full bg-black border border-neutral-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500" />
     </div>
 );
 
@@ -24,16 +17,7 @@ const FormSelect = ({ label, name, value, onChange, children, required = false }
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
             {label} {required && <span className="text-red-500">*</span>}
         </label>
-        <select
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            required={required}
-            className="w-full bg-black border border-neutral-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-            {children}
-        </select>
+        <select id={name} name={name} value={value} onChange={onChange} required={required} className="w-full bg-black border border-neutral-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500">{children}</select>
     </div>
 );
 
@@ -54,6 +38,21 @@ const FileInput = ({ label, name, onChange, required = false, fileName }) => (
     </div>
 );
 
+const ValidationModal = ({ message, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-lg p-8 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-white mb-4">Invalid Input</h3>
+            <p className="text-neutral-300 mb-6">{message}</p>
+            <button
+                onClick={onClose}
+                className="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+            >
+                OK
+            </button>
+        </div>
+    </div>
+);
+
 
 const ApplyPage = () => {
     const { jobId } = useParams();
@@ -67,9 +66,6 @@ const ApplyPage = () => {
         firstName: '',
         lastName: '',
         email: '',
-        phone: '',
-        location: '',
-        linkedin: '',
         gender: 'Select...',
         hispanicLatino: 'Select...',
         veteranStatus: 'Select...',
@@ -81,6 +77,14 @@ const ApplyPage = () => {
     const [coverLetterFileName, setCoverLetterFileName] = useState('');
     const [statusMessage, setStatusMessage] = useState('');
 
+    const [modalMessage, setModalMessage] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const showModal = (message) => {
+        setModalMessage(message);
+        setIsModalOpen(true);
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -89,19 +93,36 @@ const ApplyPage = () => {
     const handleFileChange = (e) => {
         const { name, files } = e.target;
         const file = files[0];
-        if (file) {
-            if (name === 'resume') {
-                setResume(file);
-                setResumeFileName(file.name);
-            } else if (name === 'coverLetter') {
-                setCoverLetter(file);
-                setCoverLetterFileName(file.name);
-            }
+        if (!file) return;
+
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        const validExtensions = ['pdf', 'doc', 'docx'];
+
+        if (!validExtensions.includes(fileExtension) || !allowedTypes.includes(file.type)) {
+            showModal('Invalid file type. Please upload a PDF, DOC, or DOCX file.');
+            e.target.value = '';
+            return;
+        }
+
+        if (name === 'resume') {
+            setResume(file);
+            setResumeFileName(file.name);
+        } else if (name === 'coverLetter') {
+            setCoverLetter(file);
+            setCoverLetterFileName(file.name);
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            showModal('Please enter a valid email address.');
+            return;
+        }
+
         setStatusMessage('Submitting...');
 
         if (!resume || !coverLetter || !formData.firstName || !formData.lastName || !formData.email) {
@@ -134,21 +155,16 @@ const ApplyPage = () => {
             if (result.status === 'success') {
                 setStatusMessage(`Success! Your application has been submitted.`);
                 if (formRef.current) formRef.current.reset();
-                // Reset state
                 setFormData({
-                    firstName: '', lastName: '', email: '', phone: '', location: '', linkedin: '',
+                    firstName: '', lastName: '', email: '',
                     gender: 'Select...', hispanicLatino: 'Select...',
                     veteranStatus: 'Select...', disabilityStatus: 'Select...'
                 });
-                setResume(null);
-                setCoverLetter(null);
-                setResumeFileName('');
-                setCoverLetterFileName('');
-
+                setResume(null); setCoverLetter(null);
+                setResumeFileName(''); setCoverLetterFileName('');
             } else {
                 throw new Error(result.message || 'An unknown error occurred.');
             }
-
         } catch (error) {
             console.error("Fetch Error:", error);
             setStatusMessage(`Error: ${error.message}. See console for details.`);
@@ -157,32 +173,24 @@ const ApplyPage = () => {
 
     return (
         <div className="bg-black text-white min-h-full p-8 md:p-12">
-            <div className="max-w-3xl mx-auto">
-                <header className="mb-10">
-                    <h1 className="text-4xl md:text-5xl font-bold">Apply for {jobTitle}</h1>
-                    <p className="text-neutral-400 mt-2">* Indicates a required field</p>
-                </header>
+            {isModalOpen && <ValidationModal message={modalMessage} onClose={() => setIsModalOpen(false)} />}
 
+            <div className="max-w-3xl mx-auto">
+                <header className="mb-10"><h1 className="text-4xl md:text-5xl font-bold">Apply for {jobTitle}</h1><p className="text-neutral-400 mt-2">* Indicates a required field</p></header>
                 <form onSubmit={handleSubmit} ref={formRef} className="space-y-8">
-                    {/* --- Personal Information --- */}
                     <section className="space-y-6 p-6 border border-neutral-800 rounded-lg">
                         <h2 className="text-2xl font-semibold text-white">Personal Information</h2>
                         <FormInput label="First Name" name="firstName" value={formData.firstName} onChange={handleInputChange} required />
                         <FormInput label="Last Name" name="lastName" value={formData.lastName} onChange={handleInputChange} required />
                         <FormInput label="Email" name="email" type="email" value={formData.email} onChange={handleInputChange} required />
-                        <FormInput label="Phone" name="phone" value={formData.phone} onChange={handleInputChange} />
-                        <FormInput label="Location (City)" name="location" value={formData.location} onChange={handleInputChange} />
                     </section>
 
-                    {/* --- Resume & Profile --- */}
                     <section className="space-y-6 p-6 border border-neutral-800 rounded-lg">
-                        <h2 className="text-2xl font-semibold text-white">Resume/CV & Profile</h2>
+                        <h2 className="text-2xl font-semibold text-white">Resume/CV & Cover Letter</h2>
                         <FileInput label="Resume/CV" name="resume" onChange={handleFileChange} fileName={resumeFileName} required />
                         <FileInput label="Cover Letter" name="coverLetter" onChange={handleFileChange} fileName={coverLetterFileName} required />
-                        <FormInput label="LinkedIn Profile" name="linkedin" value={formData.linkedin} onChange={handleInputChange} />
                     </section>
 
-                    {/* --- Voluntary Self-Identification --- */}
                     <section className="space-y-6 p-6 border border-neutral-800 rounded-lg">
                         <h2 className="text-2xl font-semibold text-white">Voluntary Self-Identification</h2>
                         <div className="text-sm text-neutral-400 space-y-3">
@@ -190,7 +198,7 @@ const ApplyPage = () => {
                             <p>As set forth in Thorn’s Equal Employment Opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law.</p>
                         </div>
 
-                        <FormSelect label="Gender" name="gender" value={formData.gender} onChange={handleInputChange}>
+                        <FormSelect label="Gender" name="gender" value={formData.gender} onChange={handleInputChange} required>
                             <option>Select...</option>
                             <option>Male</option>
                             <option>Female</option>
@@ -198,7 +206,7 @@ const ApplyPage = () => {
                             <option>Decline to self-identify</option>
                         </FormSelect>
 
-                        <FormSelect label="Are you Hispanic/Latino?" name="hispanicLatino" value={formData.hispanicLatino} onChange={handleInputChange}>
+                        <FormSelect label="Are you Hispanic/Latino?" name="hispanicLatino" value={formData.hispanicLatino} onChange={handleInputChange} required>
                             <option>Select...</option>
                             <option>Yes</option>
                             <option>No</option>
@@ -219,7 +227,7 @@ const ApplyPage = () => {
                             </ul>
                         </div>
 
-                        <FormSelect label="Veteran Status" name="veteranStatus" value={formData.veteranStatus} onChange={handleInputChange}>
+                        <FormSelect label="Veteran Status" name="veteranStatus" value={formData.veteranStatus} onChange={handleInputChange} required>
                             <option>Select...</option>
                             <option>I am not a protected veteran</option>
                             <option>I identify as one or more of the classifications of a protected veteran</option>
@@ -266,7 +274,7 @@ const ApplyPage = () => {
                                     <li>Traumatic brain injury</li>
                                 </ul>
                             </div>
-                            <FormSelect label="Disability Status" name="disabilityStatus" value={formData.disabilityStatus} onChange={handleInputChange}>
+                            <FormSelect label="Disability Status" name="disabilityStatus" value={formData.disabilityStatus} onChange={handleInputChange} required>
                                 <option>Select...</option>
                                 <option>Yes, I have a disability (or previously had a disability)</option>
                                 <option>No, I do not have a disability</option>

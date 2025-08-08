@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 
-
+// Helper component for form inputs
 const FormInput = ({ label, name, type = "text", value, onChange, required = false }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
@@ -11,7 +11,7 @@ const FormInput = ({ label, name, type = "text", value, onChange, required = fal
     </div>
 );
 
-
+// Helper component for select dropdowns
 const FormSelect = ({ label, name, value, onChange, children, required = false }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
@@ -21,7 +21,7 @@ const FormSelect = ({ label, name, value, onChange, children, required = false }
     </div>
 );
 
-
+// Helper component for file uploads
 const FileInput = ({ label, name, onChange, required = false, fileName }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-2">
@@ -38,14 +38,15 @@ const FileInput = ({ label, name, onChange, required = false, fileName }) => (
     </div>
 );
 
-const ValidationModal = ({ message, onClose }) => (
+// Modal component for displaying validation errors and success messages
+const FeedbackModal = ({ title, message, onClose, isError }) => (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
         <div className="bg-neutral-800 rounded-lg p-8 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-white mb-4">Invalid Input</h3>
+            <h3 className={`text-lg font-bold mb-4 ${isError ? 'text-red-500' : 'text-green-500'}`}>{title}</h3>
             <p className="text-neutral-300 mb-6">{message}</p>
             <button
                 onClick={onClose}
-                className="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                className={`w-full text-white font-semibold py-2 px-4 rounded-md transition-colors ${isError ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
                 OK
             </button>
@@ -62,27 +63,23 @@ const ApplyPage = () => {
     const inheritedJob = location.state?.job;
     const jobTitle = inheritedJob?.title || 'this Role';
 
-    const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
-        email: '',
-        gender: 'Select...',
-        hispanicLatino: 'Select...',
-        veteranStatus: 'Select...',
-        disabilityStatus: 'Select...'
-    });
+    const initialFormData = {
+        firstName: '', lastName: '', email: '',
+        gender: 'Select...', hispanicLatino: 'Select...',
+        veteranStatus: 'Select...', disabilityStatus: 'Select...'
+    };
+
+    const [formData, setFormData] = useState(initialFormData);
     const [resume, setResume] = useState(null);
     const [coverLetter, setCoverLetter] = useState(null);
     const [resumeFileName, setResumeFileName] = useState('');
     const [coverLetterFileName, setCoverLetterFileName] = useState('');
-    const [statusMessage, setStatusMessage] = useState('');
+    const [setStatusMessage] = useState('');
 
-    const [modalMessage, setModalMessage] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
 
-    const showModal = (message) => {
-        setModalMessage(message);
-        setIsModalOpen(true);
+    const showModal = (title, message, isError = true) => {
+        setModalInfo({ isOpen: true, title, message, isError });
     };
 
     const handleInputChange = (e) => {
@@ -95,12 +92,11 @@ const ApplyPage = () => {
         const file = files[0];
         if (!file) return;
 
-        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        const fileExtension = file.name.split('.').pop().toLowerCase();
         const validExtensions = ['pdf', 'doc', 'docx'];
+        const fileExtension = file.name.split('.').pop().toLowerCase();
 
-        if (!validExtensions.includes(fileExtension) || !allowedTypes.includes(file.type)) {
-            showModal('Invalid file type. Please upload a PDF, DOC, or DOCX file.');
+        if (!validExtensions.includes(fileExtension)) {
+            showModal('Invalid File Type', 'Please upload a PDF, DOC, or DOCX file.');
             e.target.value = '';
             return;
         }
@@ -119,17 +115,19 @@ const ApplyPage = () => {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(formData.email)) {
-            showModal('Please enter a valid email address.');
+            showModal('Invalid Input', 'Please enter a valid email address.');
+            return;
+        }
+        if (formData.gender === 'Select...' || formData.hispanicLatino === 'Select...' || formData.veteranStatus === 'Select...' || formData.disabilityStatus === 'Select...') {
+            showModal('Invalid Input', 'Please make a selection for all self-identification fields.');
+            return;
+        }
+        if (!resume || !coverLetter) {
+            showModal('Invalid Input', 'Please upload both a resume and a cover letter.');
             return;
         }
 
-        setStatusMessage('Submitting...');
-
-        if (!resume || !coverLetter || !formData.firstName || !formData.lastName || !formData.email) {
-            setStatusMessage('Please fill out all required fields.');
-            return;
-        }
-
+        setStatusMessage('Submitting...'); // Set status for user feedback
         const submissionData = new FormData();
         for (const key in formData) {
             submissionData.append(key, formData[key]);
@@ -153,28 +151,25 @@ const ApplyPage = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                setStatusMessage(`Success! Your application has been submitted.`);
+                showModal('Success!', 'Your application has been submitted.', false);
                 if (formRef.current) formRef.current.reset();
-                setFormData({
-                    firstName: '', lastName: '', email: '',
-                    gender: 'Select...', hispanicLatino: 'Select...',
-                    veteranStatus: 'Select...', disabilityStatus: 'Select...'
-                });
+                setFormData(initialFormData);
                 setResume(null); setCoverLetter(null);
                 setResumeFileName(''); setCoverLetterFileName('');
+                setStatusMessage(''); // Clear status message on success
             } else {
                 throw new Error(result.message || 'An unknown error occurred.');
             }
         } catch (error) {
             console.error("Fetch Error:", error);
-            setStatusMessage(`Error: ${error.message}. See console for details.`);
+            showModal('Submission Error', error.message);
+            setStatusMessage(''); // Clear status message on error
         }
     };
 
     return (
         <div className="bg-black text-white min-h-full p-8 md:p-12">
-            {isModalOpen && <ValidationModal message={modalMessage} onClose={() => setIsModalOpen(false)} />}
-
+            {modalInfo.isOpen && <FeedbackModal title={modalInfo.title} message={modalInfo.message} isError={modalInfo.isError} onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })} />}
             <div className="max-w-3xl mx-auto">
                 <header className="mb-10"><h1 className="text-4xl md:text-5xl font-bold">Apply for {jobTitle}</h1><p className="text-neutral-400 mt-2">* Indicates a required field</p></header>
                 <form onSubmit={handleSubmit} ref={formRef} className="space-y-8">
@@ -197,26 +192,13 @@ const ApplyPage = () => {
                             <p>For government reporting purposes, we ask candidates to respond to the below self-identification survey. Completion of the form is entirely voluntary. Whatever your decision, it will not be considered in the hiring process or thereafter. Any information that you do provide will be recorded and maintained in a confidential file.</p>
                             <p>As set forth in Thorn’s Equal Employment Opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law.</p>
                         </div>
-
                         <FormSelect label="Gender" name="gender" value={formData.gender} onChange={handleInputChange} required>
-                            <option>Select...</option>
-                            <option>Male</option>
-                            <option>Female</option>
-                            <option>Non-binary</option>
-                            <option>Decline to self-identify</option>
+                            <option>Select...</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to self-identify</option>
                         </FormSelect>
-
                         <FormSelect label="Are you Hispanic/Latino?" name="hispanicLatino" value={formData.hispanicLatino} onChange={handleInputChange} required>
-                            <option>Select...</option>
-                            <option>Yes</option>
-                            <option>No</option>
-                            <option>Decline to self-identify</option>
+                            <option>Select...</option><option>Yes</option><option>No</option><option>Decline to self-identify</option>
                         </FormSelect>
-
-                        <a href="https://job-boards.cdn.greenhouse.io/docs/2023/RaceEthnicityDefinitions.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">
-                            Race & Ethnicity Definitions
-                        </a>
-
+                        <a href="https://job-boards.cdn.greenhouse.io/docs/2023/RaceEthnicityDefinitions.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">Race & Ethnicity Definitions</a>
                         <div className="text-sm text-neutral-400 space-y-3 pt-4 border-t border-neutral-800">
                             <p>If you believe you belong to any of the categories of protected veterans listed below, please indicate by making the appropriate selection. As a government contractor subject to the Vietnam Era Veterans Readjustment Assistance Act (VEVRAA), we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to VEVRAA. Classification of protected categories is as follows:</p>
                             <ul className="list-disc list-inside pl-4 space-y-2">
@@ -226,22 +208,13 @@ const ApplyPage = () => {
                                 <li>An "Armed forces service medal veteran" means a veteran who, while serving on active duty in the U.S. military, ground, naval or air service, participated in a United States military operation for which an Armed Forces service medal was awarded pursuant to Executive Order 12985.</li>
                             </ul>
                         </div>
-
                         <FormSelect label="Veteran Status" name="veteranStatus" value={formData.veteranStatus} onChange={handleInputChange} required>
-                            <option>Select...</option>
-                            <option>I am not a protected veteran</option>
-                            <option>I identify as one or more of the classifications of a protected veteran</option>
-                            <option>I don’t wish to answer</option>
+                            <option>Select...</option><option>I am not a protected veteran</option><option>I identify as one or more of the classifications of a protected veteran</option><option>I don’t wish to answer</option>
                         </FormSelect>
-
                         <div className="p-4 border border-neutral-700 rounded-md">
                             <div className="flex justify-between items-start text-sm">
                                 <h3 className="font-bold">Voluntary Self-Identification of Disability</h3>
-                                <div>
-                                    <p>Form CC-305</p>
-                                    <p>OMB Control Number 1250-0005</p>
-                                    <p>Expires 04/30/2026</p>
-                                </div>
+                                <div><p>Form CC-305</p><p>OMB Control Number 1250-0005</p><p>Expires 04/30/2026</p></div>
                             </div>
                             <div className="text-sm text-neutral-400 mt-4 space-y-3">
                                 <p className="font-semibold text-white">Why are you being asked to complete this form?</p>
@@ -288,7 +261,6 @@ const ApplyPage = () => {
                         <button type="submit" className="bg-white text-black font-semibold py-3 px-8 rounded-md hover:bg-neutral-200 transition-colors">Submit Application</button>
                     </div>
 
-                    {statusMessage && (<p className="text-center text-sm text-neutral-400 mt-4">{statusMessage}</p>)}
                 </form>
             </div>
         </div>

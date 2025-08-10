@@ -52,6 +52,7 @@ const FeedbackModal = ({ title, message, onClose, isError }) => (
 
 
 const ContactPage = () => {
+    const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -73,23 +74,27 @@ const ContactPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isLoading) return; // prevent double submission
+        setIsLoading(true);
 
         // --- Frontend Validation ---
         if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.details) {
+            setIsLoading(false);
             showModal('Missing Information', 'Please fill out all required fields.');
             return;
         }
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.(com|net|org|edu|gov|mil|io|co|us|uk|ca)$/i;
         if (!emailRegex.test(formData.email)) {
-            showModal('Invalid Email', 'Please enter a valid email address.');
-            return;
+            setIsLoading(false);
+            return showModal('Invalid Input', 'Please enter a valid email address.');
         }
-        const phoneRegex = /^[0-9\s\(\)\-\+]+$/;
+        const phoneRegex = /^(\+1\s?)?(\([0-9]{3}\)|[0-9]{3})([\s.-]?[0-9]{3})([\s.-]?[0-9]{4})$/;
         if (!phoneRegex.test(formData.phone)) {
+            setIsLoading(false);
             showModal('Invalid Phone Number', 'Please enter a valid phone number.');
             return;
         }
-
+        const startTime = Date.now();
 
         try {
             const response = await fetch('https://renaisons.com/api/contact.php', {
@@ -108,20 +113,45 @@ const ContactPage = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                showModal('Success!', result.message, false);
-                // Reset form
-                setFormData({ firstName: '', lastName: '', email: '', phone: '', details: '' });
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(5000 - elapsed, 0);
+
+                setTimeout(() => {
+                    showModal('Success', 'Your inquery has been sent sucessfully', false);
+                    setFormData({ firstName: '', lastName: '', email: '', phone: '', details: '' });
+                    setIsLoading(false);
+                }, remaining);
+
             } else {
                 throw new Error(result.message || 'An unknown error occurred.');
             }
         } catch (error) {
             console.error("Submission Error:", error);
             showModal('Submission Error', error.message);
+            setIsLoading(false);
         }
     };
 
     return (
         <div className="max-w-4xl mx-auto p-8 md:p-12">
+            {isLoading && (
+                <div style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100vw",
+                    height: "100vh",
+                    background: "rgba(0, 0, 0, 0.5)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 9999,
+                    color: "#fff",
+                    fontSize: "1.5rem"
+                }}>
+                    <div>submitting...</div>
+                </div>
+            )}
             {modalInfo.isOpen && <FeedbackModal title={modalInfo.title} message={modalInfo.message} isError={modalInfo.isError} onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })} />}
 
             <h1 className="text-4xl md:text-5xl font-bold mb-4">Contact Us</h1>
@@ -152,8 +182,9 @@ const ContactPage = () => {
                     <button
                         type="submit"
                         className="bg-white text-black font-semibold py-2 px-6 rounded-md hover:bg-neutral-200 transition-colors"
+                        disabled={isLoading}
                     >
-                        Submit
+                        {isLoading ? "Submitting" : "Submit"}
                     </button>
                 </div>
             </form>

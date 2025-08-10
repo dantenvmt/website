@@ -59,6 +59,7 @@ const ApplyPage = () => {
     const { jobId } = useParams();
     const location = useLocation();
     const formRef = useRef(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const inheritedJob = location.state?.job;
     const jobTitle = inheritedJob?.title || 'this Role';
@@ -66,7 +67,7 @@ const ApplyPage = () => {
     const initialFormData = {
         firstName: '', lastName: '', email: '',
         gender: 'Select...', hispanicLatino: 'Select...',
-        veteranStatus: 'Select...', disabilityStatus: 'Select...'
+        veteranStatus: 'Select...', disabilityStatus: 'Select...', sponsorship: 'Select...'
     };
 
     const [formData, setFormData] = useState(initialFormData);
@@ -74,7 +75,6 @@ const ApplyPage = () => {
     const [coverLetter, setCoverLetter] = useState(null);
     const [resumeFileName, setResumeFileName] = useState('');
     const [coverLetterFileName, setCoverLetterFileName] = useState('');
-    const [setStatusMessage] = useState('');
 
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
 
@@ -113,21 +113,36 @@ const ApplyPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (isLoading) return; // prevent double submission
+        setIsLoading(true);
+        const startTime = Date.now();
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.(com|net|org|edu|gov|mil|io|co|us|uk|ca)$/i;
         if (!emailRegex.test(formData.email)) {
+            setIsLoading(false);
             showModal('Invalid Input', 'Please enter a valid email address.');
             return;
         }
-        if (formData.gender === 'Select...' || formData.hispanicLatino === 'Select...' || formData.veteranStatus === 'Select...' || formData.disabilityStatus === 'Select...') {
+        if (formData.firstName === '') {
+            setIsLoading(false);
+            showModal('Invalid Input', 'Please enter a valid first name.');
+            return;
+        }
+        if (formData.lastName === '') {
+            setIsLoading(false);
+            showModal('Invalid Input', 'Please enter a valid last name.');
+            return;
+        }
+        if (formData.gender === 'Select...' || formData.hispanicLatino === 'Select...' || formData.veteranStatus === 'Select...' || formData.disabilityStatus === 'Select...' || formData.sponsorship === 'Select...') {
+            setIsLoading(false);
             showModal('Invalid Input', 'Please make a selection for all self-identification fields.');
             return;
         }
         if (!resume || !coverLetter) {
+            setIsLoading(false);
             showModal('Invalid Input', 'Please upload both a resume and a cover letter.');
             return;
         }
-
-        setStatusMessage('Submitting...'); // Set status for user feedback
         const submissionData = new FormData();
         for (const key in formData) {
             submissionData.append(key, formData[key]);
@@ -151,24 +166,51 @@ const ApplyPage = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                showModal('Success!', 'Your application has been submitted.', false);
-                if (formRef.current) formRef.current.reset();
-                setFormData(initialFormData);
-                setResume(null); setCoverLetter(null);
-                setResumeFileName(''); setCoverLetterFileName('');
-                setStatusMessage(''); // Clear status message on success
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(2000 - elapsed, 0);
+
+                setTimeout(() => {
+                    showModal('Success', 'Your resume has been uploaded', false);
+                    if (formRef.current) formRef.current.reset();
+                    setFormData(initialFormData);
+                    setResume(null);
+                    setCoverLetter(null);
+                    setResumeFileName('');
+                    setCoverLetterFileName('');
+                    setIsLoading(false);
+                }, remaining);
+
             } else {
                 throw new Error(result.message || 'An unknown error occurred.');
             }
         } catch (error) {
-            console.error("Fetch Error:", error);
-            showModal('Submission Error', error.message);
-            setStatusMessage(''); // Clear status message on error
+            setIsLoading(false);
+            console.error(error);
         }
-    };
 
+    };
     return (
+
         <div className="bg-black text-white min-h-full p-8 md:p-12">
+            {isLoading && (
+                <div style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100vw",
+                    height: "100vh",
+                    background: "rgba(0, 0, 0, 0.5)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 9999,
+                    color: "#fff",
+                    fontSize: "1.5rem"
+                }}>
+                    <div>submitting...</div>
+                </div>
+            )}
+
             {modalInfo.isOpen && <FeedbackModal title={modalInfo.title} message={modalInfo.message} isError={modalInfo.isError} onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })} />}
             <div className="max-w-3xl mx-auto">
                 <header className="mb-10"><h1 className="text-4xl md:text-5xl font-bold">Apply for {jobTitle}</h1><p className="text-neutral-400 mt-2">* Indicates a required field</p></header>
@@ -184,7 +226,19 @@ const ApplyPage = () => {
                         <h2 className="text-2xl font-semibold text-white">Resume/CV & Cover Letter</h2>
                         <FileInput label="Resume/CV" name="resume" onChange={handleFileChange} fileName={resumeFileName} required />
                         <FileInput label="Cover Letter" name="coverLetter" onChange={handleFileChange} fileName={coverLetterFileName} required />
+                        <FormSelect label="Will you now, or in the future, require sponsorship for employment visa status (e.g H-1B visa Status)?" name="sponsorship" value={formData.sponsorship} on onChange={handleInputChange} required>
+                            <option disabled>
+                                Select...
+                            </option>
+                            <option>
+                                Yes
+                            </option>
+                            <option>
+                                No
+                            </option>
+                        </FormSelect>
                     </section>
+
 
                     <section className="space-y-6 p-6 border border-neutral-800 rounded-lg">
                         <h2 className="text-2xl font-semibold text-white">Voluntary Self-Identification</h2>
@@ -193,10 +247,10 @@ const ApplyPage = () => {
                             <p>As set forth in Thorn’s Equal Employment Opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law.</p>
                         </div>
                         <FormSelect label="Gender" name="gender" value={formData.gender} onChange={handleInputChange} required>
-                            <option>Select...</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to self-identify</option>
+                            <option disabled>Select...</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to self-identify</option>
                         </FormSelect>
                         <FormSelect label="Are you Hispanic/Latino?" name="hispanicLatino" value={formData.hispanicLatino} onChange={handleInputChange} required>
-                            <option>Select...</option><option>Yes</option><option>No</option><option>Decline to self-identify</option>
+                            <option disabled>Select...</option><option>Yes</option><option>No</option><option>Decline to self-identify</option>
                         </FormSelect>
                         <a href="https://job-boards.cdn.greenhouse.io/docs/2023/RaceEthnicityDefinitions.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">Race & Ethnicity Definitions</a>
                         <div className="text-sm text-neutral-400 space-y-3 pt-4 border-t border-neutral-800">
@@ -209,7 +263,7 @@ const ApplyPage = () => {
                             </ul>
                         </div>
                         <FormSelect label="Veteran Status" name="veteranStatus" value={formData.veteranStatus} onChange={handleInputChange} required>
-                            <option>Select...</option><option>I am not a protected veteran</option><option>I identify as one or more of the classifications of a protected veteran</option><option>I don’t wish to answer</option>
+                            <option disabled>Select...</option><option>I am not a protected veteran</option><option>I identify as one or more of the classifications of a protected veteran</option><option>I don’t wish to answer</option>
                         </FormSelect>
                         <div className="p-4 border border-neutral-700 rounded-md">
                             <div className="flex justify-between items-start text-sm">
@@ -248,7 +302,7 @@ const ApplyPage = () => {
                                 </ul>
                             </div>
                             <FormSelect label="Disability Status" name="disabilityStatus" value={formData.disabilityStatus} onChange={handleInputChange} required>
-                                <option>Select...</option>
+                                <option disabled>Select...</option>
                                 <option>Yes, I have a disability (or previously had a disability)</option>
                                 <option>No, I do not have a disability</option>
                                 <option>I don’t wish to answer</option>
@@ -258,12 +312,12 @@ const ApplyPage = () => {
                     </section>
 
                     <div className="text-center pt-4">
-                        <button type="submit" className="bg-white text-black font-semibold py-3 px-8 rounded-md hover:bg-neutral-200 transition-colors">Submit Application</button>
+                        <button type="submit" disabled={isLoading} className="bg-white text-black font-semibold py-3 px-8 rounded-md hover:bg-neutral-200 transition-colors">{isLoading ? "Submitting" : "Submit"}</button>
                     </div>
 
                 </form>
             </div>
-        </div>
+        </div >
     );
 };
 

@@ -31,11 +31,11 @@ const BackArrowIcon = () => (
 
 // --- Sub-Components for SideNav ---
 
-const NavHeader = ({ isNavOpen, onToggle }) => (
-    <div className={`flex items-center mb-6 ${isNavOpen ? 'justify-between' : 'justify-center'}`}>
-        {isNavOpen && <img src="/logoa.png" alt="Logo" className="h-8" />}
+const NavHeader = ({ isDesktopNavOpen, onToggle }) => (
+    <div className={`flex items-center mb-6 ${isDesktopNavOpen ? 'justify-between' : 'justify-center'}`}>
+        {isDesktopNavOpen && <img src="/logoa.png" alt="Logo" className="h-14" />}
         <button onClick={onToggle} className="p-1 rounded-md hover:bg-neutral-800">
-            {isNavOpen ? <ToggleIconOpen /> : <ToggleIconClosed />}
+            {isDesktopNavOpen ? <ToggleIconOpen /> : <ToggleIconClosed />}
         </button>
     </div>
 );
@@ -97,8 +97,9 @@ const SubNavPanel = ({ subNavData, onBack, handleSubNavClick, activeSubPage, par
     </div>
 );
 
+
 // --- Main SideNav Component ---
-const SideNav = ({ isNavOpen, setIsNavOpen }) => {
+const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpen }) => {
     const [activeSubNav, setActiveSubNav] = useState(null);
     const [activeSubPage, setActiveSubPage] = useState(null);
 
@@ -108,36 +109,74 @@ const SideNav = ({ isNavOpen, setIsNavOpen }) => {
             setActiveSubPage(subNavLinks[link.id].links[0].id);
         } else {
             setActiveSubNav(null);
+            setIsNavOpen(false);
         }
     };
 
     const handleSubNavClick = (subLink) => {
         setActiveSubPage(subLink.id);
+        setIsNavOpen(false);
     };
 
+    const desktopNavClasses = `hidden md:flex md:flex-col transition-all duration-300 ease-in-out ${isDesktopNavOpen ? 'w-64' : 'w-20'}`;
+    const mobileNavClasses = `fixed inset-y-0 left-0 z-40 flex flex-col transition-transform duration-300 ease-in-out bg-black transform ${isNavOpen ? 'translate-x-0' : '-translate-x-full'} w-64 md:hidden`;
+
     return (
-        <aside className={`bg-black p-4 flex-shrink-0 hidden md:flex flex-col transition-all duration-300 ease-in-out ${isNavOpen ? 'w-64' : 'w-20'}`}>
-            <NavHeader isNavOpen={isNavOpen} onToggle={() => setIsNavOpen(!isNavOpen)} />
-            <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 ${isNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="relative flex-grow">
-                    <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
-                        <MainNavPanel handleNavClick={handleNavClick} />
-                    </div>
-                    <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? 'translate-x-0' : 'translate-x-full'}`}>
-                        {activeSubNav && (
-                            <SubNavPanel
-                                parentId={activeSubNav}
-                                subNavData={subNavLinks[activeSubNav]}
-                                onBack={() => setActiveSubNav(null)}
-                                handleSubNavClick={handleSubNavClick}
-                                activeSubPage={activeSubPage}
-                            />
-                        )}
+        <>
+            {/* Mobile Nav */}
+            <aside className={mobileNavClasses}>
+                <NavHeader isDesktopNavOpen={true} onToggle={() => setIsNavOpen(false)} />
+                <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 opacity-100`}>
+                    <div className="relative flex-grow">
+                        <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
+                            <MainNavPanel handleNavClick={handleNavClick} />
+                        </div>
+                        <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? 'translate-x-0' : 'translate-x-full'}`}>
+                            {activeSubNav && (
+                                <SubNavPanel
+                                    parentId={activeSubNav}
+                                    subNavData={subNavLinks[activeSubNav]}
+                                    onBack={() => setActiveSubNav(null)}
+                                    handleSubNavClick={handleSubNavClick}
+                                    activeSubPage={activeSubPage}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
-        </aside>
+            </aside>
+
+            {/* Overlay for Mobile */}
+            {isNavOpen && (
+                <div
+                    className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
+                    onClick={() => setIsNavOpen(false)}
+                ></div>
+            )}
+
+            {/* Desktop Nav */}
+            <aside className={desktopNavClasses}>
+                <NavHeader isDesktopNavOpen={isDesktopNavOpen} onToggle={() => setIsDesktopNavOpen(!isDesktopNavOpen)} />
+                <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 ${isDesktopNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <div className="relative flex-grow">
+                        <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
+                            <MainNavPanel handleNavClick={handleNavClick} />
+                        </div>
+                        <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? 'translate-x-0' : 'translate-x-full'}`}>
+                            {activeSubNav && (
+                                <SubNavPanel
+                                    parentId={activeSubNav}
+                                    subNavData={subNavLinks[activeSubNav]}
+                                    onBack={() => setActiveSubNav(null)}
+                                    handleSubNavClick={handleSubNavClick}
+                                    activeSubPage={activeSubPage}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </>
     );
 };
-
 export default SideNav;

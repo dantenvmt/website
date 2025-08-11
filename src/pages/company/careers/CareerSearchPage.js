@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 const CareerSearchPage = () => {
     const Job = {
-        id: 'job_id',
+        id: '1',
         title: 'job_title',
         department: 'job_department',
         location: 'job_location',

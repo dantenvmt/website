@@ -14,7 +14,9 @@ import CareerSearchPage from './pages/company/careers/CareerSearchPage';
 import JobDescriptionPage from './pages/company/careers/JobDescriptionPage';
 import ContactPage from './pages/company/ContactPage';
 import ApplyPage from './pages/company/careers/ApplyPage';
-
+import ResumeDashboardPage from './pages/resume/ResumeDashboardPage';
+import Contact from './pages/resume/contact';
+import Experience from './pages/resume/experience';
 export default function App() {
   return (
     <Routes>
@@ -36,7 +38,9 @@ export default function App() {
         <Route path="company/careers/jobs/:jobId" element={<JobDescriptionPage />} />
         <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
 
-        <Route path="resume_optimization" element={<GenericPage title="Resume Optimization" />} />
+        <Route path="resume" element={<ResumeDashboardPage/>} />
+        <Route path="/resume/contact" element={<Contact />} />
+        <Route path="/resume/experience" element={<Experience />} />
         <Route path="job_board" element={<GenericPage title="Job Board" />} />
         <Route path="faq" element={<GenericPage title="FAQ" />} />
       </Route>

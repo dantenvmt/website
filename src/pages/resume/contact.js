@@ -1,22 +1,18 @@
 import React, { useState } from 'react';
 import EditorLayout from '../../components/resume/EditorLayout';
 
-// --- Reusable Helper Components ---
-
 const Toggle = ({ label, checked, onChange }) => (
     <div className="flex items-center space-x-2">
         <span className="text-sm text-gray-400">{label}</span>
         <button
             type="button"
             onClick={onChange}
-            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-                checked ? 'bg-cyan-500' : 'bg-gray-600'
-            }`}
+            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${checked ? 'bg-cyan-500' : 'bg-gray-600'
+                }`}
         >
             <span
-                className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                    checked ? 'translate-x-6' : 'translate-x-1'
-                }`}
+                className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'
+                    }`}
             />
         </button>
     </div>
@@ -60,8 +56,6 @@ const FormSelect = ({ label, name, value, onChange, children, showOnResume, onTo
 );
 
 
-// --- Main Contact Page Component ---
-
 const Contact = () => {
     const [formData, setFormData] = useState({
         fullName: '',
@@ -98,8 +92,8 @@ const Contact = () => {
                         <FormInput label="Email Address" name="email" value={formData.email} onChange={handleInputChange} placeholder="john.doe@example.com" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <FormInput label="Phone Number" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(123) 456-7890"/>
-                        
+                        <FormInput label="Phone Number" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(123) 456-7890" />
+
                         {/* LinkedIn URL Input */}
                         <div className="flex-1">
                             <label htmlFor="linkedin" className="block text-xs font-bold text-gray-400 uppercase mb-2">
@@ -133,7 +127,7 @@ const Contact = () => {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <FormInput label="Personal Website or Relevant Link" name="website" value={formData.website} onChange={handleInputChange} placeholder="https://www.johndoe.com"/>
+                        <FormInput label="Personal Website or Relevant Link" name="website" value={formData.website} onChange={handleInputChange} placeholder="https://www.johndoe.com" />
                         <FormSelect label="Country" name="country" value={formData.country} onChange={handleInputChange} showOnResume={toggles.country} onToggle={() => handleToggle('country')}>
                             <option value="" disabled>Select a country</option>
                             <option>United States</option>
@@ -141,12 +135,12 @@ const Contact = () => {
                         </FormSelect>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                         <FormSelect label="State" name="state" value={formData.state} onChange={handleInputChange} showOnResume={toggles.state} onToggle={() => handleToggle('state')}>
+                        <FormSelect label="State" name="state" value={formData.state} onChange={handleInputChange} showOnResume={toggles.state} onToggle={() => handleToggle('state')}>
                             <option value="" disabled>Select a state</option>
                             <option>Texas</option>
                             <option>California</option>
                         </FormSelect>
-                         <FormSelect label="City" name="city" value={formData.city} onChange={handleInputChange} showOnResume={toggles.city} onToggle={() => handleToggle('city')}>
+                        <FormSelect label="City" name="city" value={formData.city} onChange={handleInputChange} showOnResume={toggles.city} onToggle={() => handleToggle('city')}>
                             <option value="" disabled>Select a city</option>
                             <option>Richardson</option>
                             <option>Dallas</option>

@@ -17,6 +17,11 @@ import ApplyPage from './pages/company/careers/ApplyPage';
 import ResumeDashboardPage from './pages/resume/ResumeDashboardPage';
 import Contact from './pages/resume/contact';
 import Experience from './pages/resume/experience';
+import Education from './pages/resume/education';
+import Skills from './pages/resume/skills';
+import Awards from './pages/resume/awards';
+import Certificates from './pages/resume/certifications';
+import Summary from './pages/resume/summary';
 export default function App() {
   return (
     <Routes>
@@ -38,9 +43,14 @@ export default function App() {
         <Route path="company/careers/jobs/:jobId" element={<JobDescriptionPage />} />
         <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
 
-        <Route path="resume" element={<ResumeDashboardPage/>} />
+        <Route path="resume" element={<ResumeDashboardPage />} />
         <Route path="/resume/contact" element={<Contact />} />
         <Route path="/resume/experience" element={<Experience />} />
+        <Route path="/resume/education" element={<Education />} />
+        <Route path="/resume/skills" element={<Skills />} />
+        <Route path="/resume/awards" element={<Awards />} />
+        <Route path="/resume/certifications" element={<Certificates />} />
+        <Route path="/resume/summary" element={<Summary />} />
         <Route path="job_board" element={<GenericPage title="Job Board" />} />
         <Route path="faq" element={<GenericPage title="FAQ" />} />
       </Route>

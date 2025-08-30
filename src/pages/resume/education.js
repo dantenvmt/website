@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import EditorLayout from '../../components/resume/EditorLayout';
-
 
 const FormInput = ({ label, name, value, onChange, placeholder }) => (
     <div>
@@ -19,14 +18,12 @@ const FormInput = ({ label, name, value, onChange, placeholder }) => (
     </div>
 );
 
-const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggleCurrent }) => {
+const DatePicker = ({ value, onSelect, startDate }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [year, setYear] = useState(new Date().getFullYear());
     const wrapperRef = useRef(null);
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth();
     const startYear = startDate ? parseInt(startDate.split(' ')[1], 10) : null;
     const startMonthName = startDate ? startDate.split(' ')[0] : null;
     const startMonthIndex = startMonthName ? months.findIndex(m => m.startsWith(startMonthName)) : -1;
@@ -63,156 +60,124 @@ const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggl
                             ‹
                         </button>
                         <span className="font-semibold">{year}</span>
-                        <button
-                            type="button"
-                            onClick={() => setYear(year + 1)}
-                            className={`text-white font-bold text-lg px-2 ${year >= currentYear ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={year >= currentYear}
-                        >
+                        <button type="button" onClick={() => setYear(year + 1)} className="text-white font-bold text-lg px-2">
                             ›
                         </button>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center">
                         {months.map((month, index) => {
-                            const isFutureMonth = year === currentYear && index > currentMonth;
                             const isBeforeStartDate = startYear !== null && (year < startYear || (year === startYear && index < startMonthIndex));
-                            const isDisabled = isFutureMonth || isBeforeStartDate;
                             return (
                                 <button
                                     key={month}
                                     type="button"
                                     onClick={() => handleSelect(month.substring(0, 3))}
-                                    className={`p-2 rounded-md text-sm ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    disabled={isDisabled}
+                                    className={`p-2 rounded-md text-sm ${isBeforeStartDate ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    disabled={isBeforeStartDate}
                                 >
                                     {month}
                                 </button>
                             );
                         })}
                     </div>
-                    {showToggle && (
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                            <span className="text-sm">Currently work here</span>
-                            <button
-                                type="button"
-                                onClick={onToggleCurrent}
-                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${isCurrent ? 'bg-cyan-500' : 'bg-gray-600'}`}
-                            >
-                                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isCurrent ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-                    )}
                 </div>
             )}
         </div>
     );
 };
 
-const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave }) => {
+const EducationItem = ({ education, index, onUpdate, onDelete, onSave }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        onUpdate(experience.id, { ...experience, [name]: value });
+        onUpdate(education.id, { ...education, [name]: value });
     };
 
     const handleDateSelect = (name, date) => {
-        onUpdate(experience.id, { ...experience, [name]: date, isCurrent: name === 'endDate' ? false : experience.isCurrent });
+        const newEducation = { ...education, [name]: date };
+        if (name === 'startDate') {
+            const startDateObj = new Date(date);
+            const endDateObj = new Date(newEducation.endDate);
+            if (newEducation.endDate && startDateObj > endDateObj) {
+                newEducation.endDate = '';
+            }
+        }
+        onUpdate(education.id, newEducation);
     };
 
-    const toggleIsCurrent = () => {
-        onUpdate(experience.id, { ...experience, isCurrent: !experience.isCurrent });
-    };
     const handleAccomplishmentChange = (e) => {
         let { value } = e.target;
-
         if (value.length > 0 && !value.startsWith('• ')) {
             value = '• ' + value;
         }
-        onUpdate(experience.id, { ...experience, bullets: value });
+        onUpdate(education.id, { ...education, bullets: value });
     };
 
     const handleAccomplishmentKeyDown = (e) => {
         const { selectionStart, value } = e.target;
-
         if (e.key === 'Enter') {
             e.preventDefault();
             const newValue = `${value.slice(0, selectionStart)}\n• ${value.slice(selectionStart)}`;
-            onUpdate(experience.id, { ...experience, bullets: newValue });
+            onUpdate(education.id, { ...education, bullets: newValue });
         }
-
         if (e.key === 'Backspace') {
             const lines = value.split('\n');
             const currentLineIndex = value.substring(0, selectionStart).split('\n').length - 1;
             const currentLine = lines[currentLineIndex];
-            if (currentLine.trim() === '•' && selectionStart === value.lastIndexOf(currentLine) + currentLine.length) {
+            if (selectionStart > 0 && value[selectionStart - 1] === '\n' && (currentLine.trim() === '•' || currentLine.trim() === '')) {
                 e.preventDefault();
                 const newLines = lines.filter((_, index) => index !== currentLineIndex);
                 const newValue = newLines.length === 0 ? '• ' : newLines.join('\n');
-                onUpdate(experience.id, { ...experience, bullets: newValue });
+                onUpdate(education.id, { ...education, bullets: newValue });
             }
         }
     };
 
-    useEffect(() => {
-        if (experience.isCurrent) {
-            onUpdate(experience.id, { ...experience, endDate: 'Present' });
-        }
-    }, [experience.isCurrent]);
-
-    const companyName = experience.company || 'THE COMPANY';
+    const schoolName = education.school || 'THE INSTITUTION';
 
     return (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 mb-8">
             <div className="flex justify-between items-start mb-6">
                 <h2 className="text-xl">
-                    <span className="font-bold">{experience.role || `Experience ${index + 1}`}</span>
-                    <span className="text-base font-normal text-gray-400 ml-2">{`${experience.company}`}</span>
-                    <span className="text-base font-normal text-gray-400 ml-2">{`${experience.startDate || 'Start Date'} - ${experience.endDate || 'Current'}`}</span>
-
+                    <span className="font-bold">{education.degree || `Education ${index + 1}`}</span>
+                    <span className="text-base font-normal text-gray-400 ml-2">{education.school}</span>
+                    {(education.startDate || education.endDate) && <span className="text-base font-normal text-gray-400 ml-2">{`${education.startDate || '...'} - ${education.endDate || '...'}`}</span>}
                 </h2>
-                <button onClick={() => onDelete(experience.id)} className="text-gray-500 hover:text-red-500 flex-shrink-0 ml-4">
+                <button onClick={() => onDelete(education.id)} className="text-gray-500 hover:text-red-500 flex-shrink-0 ml-4">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
             </div>
 
-            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onSave(experience.id); }}>
-                <FormInput label={`WHAT WAS YOUR ROLE AT ${companyName}? *`} name="role" value={experience.role} onChange={handleInputChange} placeholder={'Data Scientist'} />
-                <FormInput label="FOR WHICH COMPANY DID YOU WORK? *" name="company" value={experience.company} onChange={handleInputChange} placeholder={'Google'} />
+            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onSave(education.id); }}>
+                <FormInput label={`What is your degree or other qualification and major at ${schoolName}? *`} name="degree" value={education.degree} onChange={handleInputChange} placeholder={'Bachelor of science in Data Science'} />
+                <FormInput label="WHERE DID YOU EARN YOUR DEGREE/QUALIFICATION? *" name="school" value={education.school} onChange={handleInputChange} placeholder={'Texas A&M University'} />
+                <FormInput label={`Where is ${schoolName} located? *`} name="location" value={education.location} onChange={handleInputChange} placeholder={'Dallas, TX'} />
+                <FormInput label={`Did you minor in anything?`} name="minor" value={education.minor} onChange={handleInputChange} placeholder={'Business'} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{`HOW LONG WERE YOU WITH ${companyName}?`}</label>
+                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{`HOW LONG WERE YOU AT ${schoolName}?`}</label>
                         <div className="flex items-center gap-4">
                             <DatePicker
-                                value={experience.startDate}
+                                value={education.startDate}
                                 onSelect={(date) => handleDateSelect('startDate', date)}
                             />
                             <DatePicker
-                                value={experience.endDate}
+                                value={education.endDate}
                                 onSelect={(date) => handleDateSelect('endDate', date)}
-                                startDate={experience.startDate}
-                                showToggle={true}
-                                isCurrent={experience.isCurrent}
-                                onToggleCurrent={toggleIsCurrent}
+                                startDate={education.startDate}
                             />
                         </div>
                     </div>
-                    <FormInput label={`WHERE WAS ${companyName} LOCATED?`} name="location" value={experience.location} onChange={handleInputChange} placeholder={"Mountain View, CA"} />
+                    <FormInput label={`GPA (if applicable)`} name="gpa" value={education.gpa} onChange={handleInputChange} placeholder={'4.0 GPA'} />
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{`WHAT DID YOU DO AT ${companyName}?`}</label>
-                    <textarea
-                        name="bullets"
-                        value={experience.bullets}
-                        onChange={handleAccomplishmentChange}
-                        onKeyDown={handleAccomplishmentKeyDown}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-md p-3 leading-relaxed"
-                        rows="8"
-                    />
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{`OPEN FIELD FOR ADDITIONAL INFORMATION`}</label>
+                    <textarea name="bullets" value={education.bullets} onChange={handleAccomplishmentChange} onKeyDown={handleAccomplishmentKeyDown} className="w-full bg-gray-900 border border-gray-700 rounded-md p-3 leading-relaxed" rows="8" />
                 </div>
                 <div className="flex justify-end">
                     <button type="submit" className="bg-gray-200 hover:bg-gray-300 text-black font-bold py-2 px-6 rounded-lg">
-                        SAVE TO EXPERIENCE LIST
+                        SAVE TO EDUCATION LIST
                     </button>
                 </div>
             </form>
@@ -221,59 +186,61 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave }) => {
 };
 
 
-// --- Main Experience Page ---
-
-const Experience = () => {
-    const createNewExperience = () => ({
+// --- Main Education Page ---
+const Education = () => {
+    const createNewEducation = () => ({
         id: Date.now(),
-        role: '',
-        company: '',
+        degree: '',
+        school: '',
         startDate: '',
         endDate: '',
-        isCurrent: false,
         location: '',
         bullets: '• ',
+        minor: '',
+        gpa: '',
     });
 
-    const [experiences, setExperiences] = useState([createNewExperience()]);
+    const [educations, setEducations] = useState([createNewEducation()]);
 
-    const addExperience = () => {
-        setExperiences([...experiences, createNewExperience()]);
+    const addEducation = () => {
+        setEducations([...educations, createNewEducation()]);
     };
 
-    const updateExperience = (id, updatedData) => {
-        setExperiences(experiences.map(exp => exp.id === id ? updatedData : exp));
+    const updateEducation = useCallback((id, updatedData) => {
+        setEducations(educations => educations.map(edu => (edu.id === id ? updatedData : edu)));
+    }, []);
+
+    const deleteEducation = (id) => {
+        if (educations.length > 1) {
+            setEducations(educations.filter(edu => edu.id !== id));
+        }
     };
 
-    const deleteExperience = (id) => {
-        setExperiences(experiences.filter(exp => exp.id !== id));
-    };
-
-    const saveExperience = (id) => {
-        const experienceToSave = experiences.find(exp => exp.id === id);
-        console.log("Saving experience:", experienceToSave);
-        alert(`${experienceToSave.role || 'Experience'} saved!`);
+    const saveEducation = (id) => {
+        const educationToSave = educations.find(edu => edu.id === id);
+        console.log("Saving Education:", educationToSave);
+        alert(`${educationToSave.degree || 'Education'} saved!`);
     };
 
     return (
         <EditorLayout>
-            {experiences.map((exp, index) => (
-                <ExperienceItem
-                    key={exp.id}
-                    experience={exp}
+            {educations.map((edu, index) => (
+                <EducationItem
+                    key={edu.id}
+                    education={edu}
                     index={index}
-                    onUpdate={updateExperience}
-                    onDelete={deleteExperience}
-                    onSave={saveExperience}
+                    onUpdate={updateEducation}
+                    onDelete={deleteEducation}
+                    onSave={saveEducation}
                 />
             ))}
             <div className="flex justify-center">
-                <button onClick={addExperience} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">
-                    ADD ANOTHER EXPERIENCE
+                <button onClick={addEducation} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">
+                    ADD ANOTHER EDUCATION
                 </button>
             </div>
         </EditorLayout>
     );
 };
 
-export default Experience;
+export default Education;

@@ -14,7 +14,7 @@ const ResumeDashboardPage = () => {
     };
 
     useEffect(() => {
-        handleSort('date'); 
+        handleSort('date');
     }, []);
 
     const handleSort = (sortType) => {
@@ -44,14 +44,12 @@ const ResumeDashboardPage = () => {
                 </button>
             </header>
 
-            {/* Sort and View Controls */}
             <div className="flex justify-end items-center mb-6">
                 <div className="relative">
                     <button
                         onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
                         className="flex items-center text-neutral-300 hover:text-white px-3 py-1 rounded-md"
                     >
-                        {/* THIS IS THE UPDATED LINE */}
                         <span>{sortOptions[currentSort]}</span>
                         <ChevronDownIcon className="h-4 w-4 ml-2" />
                     </button>
@@ -79,17 +77,15 @@ const ResumeDashboardPage = () => {
             </div>
 
 
-            {/* Grid of Resumes */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {/* "Create New" Card */}
-                <Link to="/resume/new" className="flex items-center justify-center bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg hover:border-cyan-500 transition-colors duration-300 cursor-pointer" style={{ minHeight: '220px' }}>
+
+                <Link to="/resume/contact" className="flex items-center justify-center bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg hover:border-cyan-500 transition-colors duration-300 cursor-pointer" style={{ minHeight: '220px' }}>
                     <div className="text-center">
                         <PlusIcon className="h-12 w-12 mx-auto text-gray-500" />
                         <p className="mt-2 text-lg font-semibold text-gray-400">Create new resume</p>
                     </div>
                 </Link>
 
-                {/* Existing Resume Cards */}
                 {sortedResumes.map((resume) => (
                     <ResumeCard key={resume.id} resume={resume} />
                 ))}

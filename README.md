@@ -79,22 +79,3 @@ website/
     * **`/src/pages`**: Contains the main components that represent a full page or view in the application (e.g., `HomePage.js`, `AboutPage.js`). These are typically assembled using smaller components from the `/components` directory.
 
 ---
-
-## How to Contribute
-
-We welcome contributions! Please follow this workflow to make the process smooth for everyone.
-
-### 1. Create a Branch
-
-Create a new branch for your feature or bug fix.
-
-```bash
-
-git checkout main
-git pull origin main
-```
-
-# Create your new branch
-```bash
-git checkout -b feature/your-feature-name
-```

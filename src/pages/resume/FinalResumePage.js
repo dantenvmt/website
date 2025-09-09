@@ -49,9 +49,7 @@ const FinalResumePage = () => {
 
     const handleDragStart = (e, position) => {
         dragItem.current = position;
-        setTimeout(() => {
-            setIsDragging(true);
-        }, 0);
+        setTimeout(() => setIsDragging(true), 0);
     };
 
     const handleDragEnter = (e, position) => {
@@ -136,6 +134,12 @@ const FinalResumePage = () => {
         contactToggles.country && contact.country,
     ].filter(Boolean).join(', ');
 
+    const phoneNumber = [
+        contactToggles.phone && contact.phone
+    ].filter(Boolean);
+    const LinkedInAddress = [
+        contactToggles.linkedin && contact.linkedin
+    ].filter(Boolean);
     return (
         <div className="bg-[#0f172a] text-white min-h-screen p-4 sm:p-8">
             <div className="max-w-7xl mx-auto">
@@ -156,6 +160,7 @@ const FinalResumePage = () => {
                     >
                         <header className="text-center mb-6">
                             <h1 className="text-3xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
+                            <hr className="my-2 border-t border-black" />
                             <div className="text-xs text-gray-700 mt-2 flex justify-center items-center flex-wrap gap-x-4 gap-y-1">
                                 {locationString && (
                                     <span className="flex items-center">
@@ -169,11 +174,17 @@ const FinalResumePage = () => {
                                         {contact.email}
                                     </span>
                                 )}
-                                {contact.phone && (
+                                {phoneNumber && (
                                     <span className="flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                                        {contact.phone}
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path clipRule="evenodd" fillRule="evenodd" d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                                        {phoneNumber}
                                     </span>
+                                )}
+                                {LinkedInAddress && (
+                                    <a href={`https://linkedin.com/in/${contact.linkedin}`} target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-700 hover:text-blue-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 24 24" fill="currentColor"><path clipRule="evenodd" fillRule="evenodd" d="M21.25 2H2.75C2.336 2 2 2.336 2 2.75v18.5C2 21.664 2.336 22 2.75 22h18.5c.414 0 .75-.336.75-.75V2.75c0-.414-.336-.75-.75-.75zM8.29 18.995H5.45V9.72h2.84v9.275zM6.87 8.507c-.9 0-1.63-.73-1.63-1.63s.73-1.63 1.63-1.63 1.63.73 1.63 1.63-.73 1.63-1.63 1.63zm12.125 10.488h-2.84V14.3c0-.88-.015-2.01-1.225-2.01s-1.415.955-1.415 1.945v4.76h-2.84V9.72h2.725v1.24h.04c.375-.71 1.29-1.45 2.685-1.45 2.875 0 3.405 1.89 3.405 4.35v4.99z" /></svg>
+                                        linkedin.com/in/{LinkedInAddress}
+                                    </a>
                                 )}
                             </div>
                         </header>

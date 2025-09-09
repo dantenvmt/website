@@ -6,7 +6,6 @@ const ResumeContext = createContext();
 // Custom hook to use the resume context easily
 export const useResume = () => useContext(ResumeContext);
 
-// The provider component that will wrap your app or resume section
 export const ResumeProvider = ({ children }) => {
     // --- STATE FOR ALL RESUME SECTIONS ---
 
@@ -22,7 +21,9 @@ export const ResumeProvider = ({ children }) => {
     });
 
     const [contactToggles, setContactToggles] = useState({
-        city: false,
+        phone: true,
+        linkedin: true,
+        city: true,
         state: true,
         country: true,
     });

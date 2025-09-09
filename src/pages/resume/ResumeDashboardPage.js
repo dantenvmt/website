@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { resumeData } from '../../data/resumeData';
 import ResumeCard from '../../components/resume/ResumeCard';
 import { PlusIcon, ChevronDownIcon, CheckIcon } from '@heroicons/react/24/solid';
-import { Link } from 'react-router-dom';
+import CreateResumeModal from '../../components/resume/CreateResumeModal'; // Import the modal
+
 const ResumeDashboardPage = () => {
     const [sortedResumes, setSortedResumes] = useState([]);
     const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
     const [currentSort, setCurrentSort] = useState('date');
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const sortOptions = {
         date: 'Edited',
@@ -33,6 +35,7 @@ const ResumeDashboardPage = () => {
 
     return (
         <div className="text-white min-h-screen p-8">
+            <CreateResumeModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
             {/* Header Section */}
             <header className="flex justify-between items-center mb-8">
                 <div>
@@ -76,15 +79,15 @@ const ResumeDashboardPage = () => {
                 </div>
             </div>
 
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-
-                <Link to="/resume/contact" className="flex items-center justify-center bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg hover:border-cyan-500 transition-colors duration-300 cursor-pointer" style={{ minHeight: '220px' }}>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center justify-center bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg hover:border-cyan-500 transition-colors duration-300 cursor-pointer" style={{ minHeight: '220px' }}>
                     <div className="text-center">
                         <PlusIcon className="h-12 w-12 mx-auto text-gray-500" />
                         <p className="mt-2 text-lg font-semibold text-gray-400">Create new resume</p>
                     </div>
-                </Link>
+                </button>
 
                 {sortedResumes.map((resume) => (
                     <ResumeCard key={resume.id} resume={resume} />

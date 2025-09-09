@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import EditorLayout from '../../components/resume/EditorLayout';
+import SaveButton from '../../components/common/SaveButton';
+import FormTextarea from '../../components/resume/FormTextarea';
+import { useResume } from '../../context/ResumeContext';
 
 const Skills = () => {
-    const [skills, setSkills] = useState('');
+    const { skills, setSkills } = useResume();
 
     const handleSkillsChange = (e) => {
         setSkills(e.target.value);
@@ -15,31 +18,20 @@ const Skills = () => {
 
     return (
         <EditorLayout>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-8">
-                <div className="flex justify-between items-center mb-4">
-                    <label htmlFor="skills-textarea" className="block text-xs font-bold text-gray-400 uppercase">
-                        ENTER THE SKILLS YOU POSSESS *
-                    </label>
-                </div>
-
-                <textarea
-                    id="skills-textarea"
+            <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-8">
+                <FormTextarea
+                    label="ENTER THE SKILLS YOU POSSESS *"
                     name="skills"
                     value={skills}
                     onChange={handleSkillsChange}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-md p-4 leading-relaxed focus:ring-cyan-500 focus:border-cyan-500"
-                    rows="6"
+                    rows="8"
                     placeholder="Python, R, SQL, Tableau, PowerBI, Excel, ..."
                 />
 
                 <div className="flex justify-end mt-6">
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg"
-                    >
+                    <SaveButton onClick={handleSave}>
                         SAVE TO SKILLS LIST
-                    </button>
+                    </SaveButton>
                 </div>
             </div>
         </EditorLayout>
@@ -47,3 +39,4 @@ const Skills = () => {
 };
 
 export default Skills;
+

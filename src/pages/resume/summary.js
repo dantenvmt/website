@@ -1,45 +1,36 @@
-import React, { useState } from 'react';
+import React from 'react';
 import EditorLayout from '../../components/resume/EditorLayout';
+import SaveButton from '../../components/common/SaveButton';
+import FormTextarea from '../../components/resume/FormTextarea';
+import { useResume } from '../../context/ResumeContext';
 
 const Summary = () => {
-    const [Summary, setSummary] = useState('');
+    const { summary, setSummary } = useResume();
 
     const handleSummaryChange = (e) => {
         setSummary(e.target.value);
     };
 
     const handleSave = () => {
-        console.log("Saving Summary:", Summary);
+        console.log("Saving Summary:", summary);
         alert("Summary saved!");
     };
 
     return (
         <EditorLayout>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-8">
-                <div className="flex justify-between items-center mb-4">
-                    <label htmlFor="Summary-textarea" className="block text-xs font-bold text-gray-400 uppercase">
-                        WRITE A PROFESSIONAL SUMMARY
-                    </label>
-                </div>
-
-                <textarea
-                    id="Summary-textarea"
+            <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-8">
+                <FormTextarea
+                    label="WRITE A PROFESSIONAL SUMMARY"
                     name="Summary"
-                    value={Summary}
+                    value={summary}
                     onChange={handleSummaryChange}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-md p-4 leading-relaxed focus:ring-cyan-500 focus:border-cyan-500"
-                    rows="6"
-                    placeholder="Results oriented, outcome focused, and purpose driven analyst with experience leading teams through complex, data driven projects for major financial institutions. A diverse and progressive career spanning over 3 years in data analytics and machine learning.">
-                </textarea>
-
+                    rows="8"
+                    placeholder="Results oriented, outcome focused, and purpose driven analyst..."
+                />
                 <div className="flex justify-end mt-6">
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg"
-                    >
+                    <SaveButton onClick={handleSave}>
                         SAVE TO SUMMARY
-                    </button>
+                    </SaveButton>
                 </div>
             </div>
         </EditorLayout>
@@ -47,3 +38,4 @@ const Summary = () => {
 };
 
 export default Summary;
+

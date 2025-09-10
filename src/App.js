@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 import MainLayout from './components/layout/MainLayout';
-
+import { ResumeProvider } from './context/ResumeContext';
 // --- Page Components ---
 import HomePage from './pages/HomePage';
 import GenericPage from './pages/GenericPage';
@@ -22,6 +22,25 @@ import Skills from './pages/resume/skills';
 import Awards from './pages/resume/awards';
 import Certificates from './pages/resume/certifications';
 import Summary from './pages/resume/summary';
+import FinalResumePage from './pages/resume/FinalResumePage';
+
+
+
+const ResumeRoutes = () => (
+  <ResumeProvider>
+    <Routes>
+      <Route index element={<ResumeDashboardPage />} />
+      <Route path="contact" element={<Contact />} />
+      <Route path="experience" element={<Experience />} />
+      <Route path="education" element={<Education />} />
+      <Route path="skills" element={<Skills />} />
+      <Route path="awards" element={<Awards />} />
+      <Route path="certifications" element={<Certificates />} />
+      <Route path="summary" element={<Summary />} />
+      <Route path="final" element={<FinalResumePage />} />
+    </Routes>
+  </ResumeProvider>
+);
 export default function App() {
   return (
     <Routes>
@@ -43,16 +62,7 @@ export default function App() {
         <Route path="company/careers/jobs/:jobId" element={<JobDescriptionPage />} />
         <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
 
-        <Route path="resume" element={<ResumeDashboardPage />} />
-        <Route path="/resume/contact" element={<Contact />} />
-        <Route path="/resume/experience" element={<Experience />} />
-        <Route path="/resume/education" element={<Education />} />
-        <Route path="/resume/skills" element={<Skills />} />
-        <Route path="/resume/awards" element={<Awards />} />
-        <Route path="/resume/certifications" element={<Certificates />} />
-        <Route path="/resume/summary" element={<Summary />} />
-        <Route path="job_board" element={<GenericPage title="Job Board" />} />
-        <Route path="faq" element={<GenericPage title="FAQ" />} />
+        <Route path="resume/*" element={<ResumeRoutes />} />
       </Route>
     </Routes>
   );

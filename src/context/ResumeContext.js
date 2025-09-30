@@ -1,155 +1,70 @@
 import React, { createContext, useState, useContext } from 'react';
 
-// Create the context
 const ResumeContext = createContext();
 
-// Custom hook to use the resume context easily
 export const useResume = () => useContext(ResumeContext);
+
+// Define initial states to easily reset them
+const initialContact = {
+    fullName: '', email: '', phone: '', linkedin: '', website: '',
+    city: '', state: '', country: '',
+};
+
+const initialContactToggles = {
+    phone: true, linkedin: true, city: true, state: true, country: true,
+};
+
+const initialExperiences = () => ([
+    { id: Date.now(), role: '', company: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', aiUsesLeft: 3 }
+]);
+
+const initialEducations = () => ([
+    { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }
+]);
+
+const initialAwards = () => ([
+    { id: Date.now(), name: '', organization: '', date: '', relevance: '' }
+]);
+
+const initialCertifications = () => ([
+    { id: Date.now(), name: '', organization: '', date: '', relevance: '' }
+]);
+
 
 export const ResumeProvider = ({ children }) => {
     // --- STATE FOR ALL RESUME SECTIONS ---
-
-    const [contact, setContact] = useState({
-        fullName: '',
-        email: '',
-        phone: '',
-        linkedin: '',
-        website: '',
-        city: '',
-        state: '',
-        country: '',
-    });
-
-    const [contactToggles, setContactToggles] = useState({
-        phone: true,
-        linkedin: true,
-        city: true,
-        state: true,
-        country: true,
-    });
-
-    // Summary
+    const [contact, setContact] = useState(initialContact);
+    const [contactToggles, setContactToggles] = useState(initialContactToggles);
     const [summary, setSummary] = useState('');
-
-    // Skills
     const [skills, setSkills] = useState('');
+    const [experiences, setExperiences] = useState(initialExperiences);
+    const [educations, setEducations] = useState(initialEducations);
+    const [awards, setAwards] = useState(initialAwards);
+    const [certifications, setCertifications] = useState(initialCertifications);
 
-    // Experience (List)
-    const [experiences, setExperiences] = useState([
-        {
-            id: Date.now(),
-            role: '',
-            company: '',
-            startDate: '',
-            endDate: '',
-            isCurrent: false,
-            location: '',
-            bullets: '• ',
-            aiUsesLeft: 3,
-        }
-    ]);
+    // --- NEW STATE FOR AI FEATURES ---
+    const [jobDescription, setJobDescription] = useState('');
+    const [aiAnalysis, setAiAnalysis] = useState(null); // To hold score, keywords, etc.
 
-    // Education (List)
-    const [educations, setEducations] = useState([
-        {
-            id: Date.now(),
-            degree: '',
-            school: '',
-            startDate: '',
-            endDate: '',
-            location: '',
-            bullets: '• ',
-            minor: '',
-            gpa: '',
-        }
-    ]);
+    // --- FUNCTIONS ---
+    const addExperience = () => setExperiences(prev => [...prev, { id: Date.now(), role: '', company: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', aiUsesLeft: 3 }]);
+    const addEducation = () => setEducations(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }]);
+    const addAward = () => setAwards(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
+    const addCertificate = () => setCertifications(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
 
-    // Awards (List)
-    const [awards, setAwards] = useState([
-        {
-            id: Date.now(),
-            name: '',
-            organization: '',
-            date: '',
-            relevance: '',
-        }
-    ]);
-
-    // Certifications (List)
-    const [certifications, setCertifications] = useState([
-        {
-            id: Date.now(),
-            name: '',
-            organization: '',
-            date: '',
-            relevance: '',
-        }
-    ]);
-
-    // --- FUNCTIONS TO ADD NEW ITEMS TO LISTS ---
-
-    const addExperience = () => {
-        setExperiences(prev => [
-            ...prev,
-            {
-                id: Date.now(),
-                role: '',
-                company: '',
-                startDate: '',
-                endDate: '',
-                isCurrent: false,
-                location: '',
-                bullets: '• ',
-                aiUsesLeft: 3,
-            }
-        ]);
+    // --- NEW RESET FUNCTION ---
+    const resetResume = () => {
+        setContact(initialContact);
+        setContactToggles(initialContactToggles);
+        setSummary('');
+        setSkills('');
+        setExperiences(initialExperiences());
+        setEducations(initialEducations());
+        setAwards(initialAwards());
+        setCertifications(initialCertifications());
+        setJobDescription('');
+        setAiAnalysis(null);
     };
-
-    const addEducation = () => {
-        setEducations(prev => [
-            ...prev,
-            {
-                id: Date.now(),
-                degree: '',
-                school: '',
-                startDate: '',
-                endDate: '',
-                location: '',
-                bullets: '• ',
-                minor: '',
-                gpa: '',
-            }
-        ]);
-    };
-
-    const addAward = () => {
-        setAwards(prev => [
-            ...prev,
-            {
-                id: Date.now(),
-                name: '',
-                organization: '',
-                date: '',
-                relevance: '',
-            }
-        ]);
-    };
-
-    const addCertificate = () => {
-        setCertifications(prev => [
-            ...prev,
-            {
-                id: Date.now(),
-                name: '',
-                organization: '',
-                date: '',
-                relevance: '',
-            }
-        ]);
-    };
-
-
-    // --- VALUE PROVIDED TO CHILDREN ---
 
     const value = {
         contact, setContact,
@@ -160,6 +75,9 @@ export const ResumeProvider = ({ children }) => {
         educations, setEducations, addEducation,
         awards, setAwards, addAward,
         certifications, setCertifications, addCertificate,
+        jobDescription, setJobDescription,
+        aiAnalysis, setAiAnalysis,
+        resetResume, // Expose the reset function
     };
 
     return (
@@ -168,4 +86,3 @@ export const ResumeProvider = ({ children }) => {
         </ResumeContext.Provider>
     );
 };
-

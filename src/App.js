@@ -23,6 +23,7 @@ import Awards from './pages/resume/awards';
 import Certificates from './pages/resume/certifications';
 import Summary from './pages/resume/summary';
 import FinalResumePage from './pages/resume/FinalResumePage';
+import Projects from './pages/resume/projects';
 
 
 
@@ -36,6 +37,7 @@ const ResumeRoutes = () => (
       <Route path="skills" element={<Skills />} />
       <Route path="awards" element={<Awards />} />
       <Route path="certifications" element={<Certificates />} />
+      <Route path="projects" element={<Projects />} />
       <Route path="summary" element={<Summary />} />
       <Route path="final" element={<FinalResumePage />} />
     </Routes>

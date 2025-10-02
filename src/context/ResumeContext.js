@@ -29,7 +29,9 @@ const initialAwards = () => ([
 const initialCertifications = () => ([
     { id: Date.now(), name: '', organization: '', date: '', relevance: '' }
 ]);
-
+const initialProjects = () => ([
+    { id: Date.now(), name: '', organization: '', date: '', relevance: '' }
+]);
 
 export const ResumeProvider = ({ children }) => {
     // --- STATE FOR ALL RESUME SECTIONS ---
@@ -41,6 +43,7 @@ export const ResumeProvider = ({ children }) => {
     const [educations, setEducations] = useState(initialEducations);
     const [awards, setAwards] = useState(initialAwards);
     const [certifications, setCertifications] = useState(initialCertifications);
+    const [projects, setProjects] = useState(initialProjects);
 
     // --- NEW STATE FOR AI FEATURES ---
     const [jobDescription, setJobDescription] = useState('');
@@ -51,6 +54,7 @@ export const ResumeProvider = ({ children }) => {
     const addEducation = () => setEducations(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }]);
     const addAward = () => setAwards(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
     const addCertificate = () => setCertifications(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
+    const addProject = () => setProjects(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
 
     // --- NEW RESET FUNCTION ---
     const resetResume = () => {
@@ -62,6 +66,7 @@ export const ResumeProvider = ({ children }) => {
         setEducations(initialEducations());
         setAwards(initialAwards());
         setCertifications(initialCertifications());
+        setProjects(initialProjects());
         setJobDescription('');
         setAiAnalysis(null);
     };
@@ -75,6 +80,7 @@ export const ResumeProvider = ({ children }) => {
         educations, setEducations, addEducation,
         awards, setAwards, addAward,
         certifications, setCertifications, addCertificate,
+        projects, setProjects, addProject,
         jobDescription, setJobDescription,
         aiAnalysis, setAiAnalysis,
         resetResume, // Expose the reset function

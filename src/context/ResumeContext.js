@@ -54,7 +54,7 @@ export const ResumeProvider = ({ children }) => {
     const addEducation = () => setEducations(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }]);
     const addAward = () => setAwards(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
     const addCertificate = () => setCertifications(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
-    const addProject = () => setProjects(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]);
+    const addProject = () => setProjects(prev => [...prev, { id: Date.now(), name: '', date: '', relevance: '' }]);
 
     // --- NEW RESET FUNCTION ---
     const resetResume = () => {

@@ -26,7 +26,6 @@ import FinalResumePage from './pages/resume/FinalResumePage';
 import Projects from './pages/resume/projects';
 
 
-
 const ResumeRoutes = () => (
   <ResumeProvider>
     <Routes>

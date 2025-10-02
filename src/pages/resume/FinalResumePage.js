@@ -2,10 +2,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
 import jsPDF from 'jspdf';
+import AIKeywordAnalysis from '../../components/resume/AIKeywordAnalysis'; // Import the new component
 
 // --- Helper component to render a single page ---
 const ResumePage = ({ children, pageNumber, totalPages }) => (
-    <div className="bg-white text-black p-12 font-serif shadow-lg my-4 relative" style={{ width: '210mm', minHeight: '297mm' }}>
+    <div className="bg-white text-black p-8 font-serif shadow-lg my-4 relative" style={{ width: '210mm', minHeight: '350mm' }}>
         {children}
         {totalPages > 1 && (
             <div className="absolute bottom-4 right-4 text-xs text-gray-500">
@@ -15,63 +16,6 @@ const ResumePage = ({ children, pageNumber, totalPages }) => (
     </div>
 );
 
-
-const AIKeywordAnalysis = () => {
-    const { jobDescription, setAiAnalysis, aiAnalysis } = useResume();
-
-    useEffect(() => {
-        if (jobDescription) {
-            // This is a placeholder to simulate the AI results
-            setAiAnalysis({
-                score: 85,
-                matchingKeywords: ['Machine Learning', 'Data Warehousing', 'Python', 'SQL'],
-                missingKeywords: ['Cloud (AWS/GCP)', 'CI/CD', 'Docker'],
-                gap: 'Experience with cloud platforms is missing but required.',
-                recommendation: 'Add a project or skill demonstrating experience with AWS, GCP, or Azure.'
-            });
-        }
-    }, [jobDescription, setAiAnalysis]);
-
-    if (!jobDescription || !aiAnalysis) {
-        return (
-            <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6">
-                <h3 className="font-bold text-lg">AI Keyword Targeting</h3>
-                <p className="text-sm text-gray-400 mt-2">No job description provided. Paste one in the AI builder to see keyword analysis.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6 text-left">
-            <h3 className="font-bold text-lg mb-4">AI Keyword Targeting</h3>
-
-            <div className="text-center mb-4">
-                <p className="text-gray-400 text-sm">Overall Match Score</p>
-                <p className="text-4xl font-bold text-green-400">{aiAnalysis.score}%</p>
-            </div>
-
-            <div className="space-y-4 text-sm">
-                <div>
-                    <h4 className="font-semibold text-white mb-2">Matching Keywords</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {aiAnalysis.matchingKeywords.map(kw => <span key={kw} className="bg-green-900 text-green-300 text-xs font-medium px-2.5 py-1 rounded-full">{kw}</span>)}
-                    </div>
-                </div>
-                <div>
-                    <h4 className="font-semibold text-white mb-2">Missing Keywords</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {aiAnalysis.missingKeywords.map(kw => <span key={kw} className="bg-red-900 text-red-300 text-xs font-medium px-2.5 py-1 rounded-full">{kw}</span>)}
-                    </div>
-                </div>
-                <div>
-                    <h4 className="font-semibold text-white mb-1">Analysis & Recommendation</h4>
-                    <p className="text-gray-400"><strong className="text-gray-200">Gap:</strong> {aiAnalysis.gap}</p>
-                    <p className="text-gray-400"><strong className="text-gray-200">Recommendation:</strong> {aiAnalysis.recommendation}</p>
-                </div>
-            </div>
-        </div>
-    );
-};
 // --- Draggable Section Wrapper ---
 const DraggableResumeSection = ({ title, children, onDragStart, onDrop, onDragEnd, onDragOver, index, isDraggedItem, ...props }) => {
     return (
@@ -122,13 +66,19 @@ const FinalResumePage = () => {
     // --- Pagination logic for PREVIEW (breaks between sections) ---
     useEffect(() => {
         if (hiddenPreviewRef.current && orderedSections.length > 0) {
-            const A4_HEIGHT_PX = 1122.5;
-            const HEADER_HEIGHT_PX = hiddenPreviewRef.current.querySelector('header').offsetHeight;
-            const PAGE_MARGIN_PX = 96;
+            const PAGE_HEIGHT_PX = 1322.8; // Corresponds to 350mm
+            const PAGE_MARGIN_PX = 64;    // Corresponds to p-8 (32px top + 32px bottom)
+            const USABLE_PAGE_HEIGHT_PX = PAGE_HEIGHT_PX - PAGE_MARGIN_PX;
 
-            let currentPage = 0;
-            let currentHeight = HEADER_HEIGHT_PX;
-            const pages = [[]];
+            const headerNode = hiddenPreviewRef.current.querySelector('header');
+            const HEADER_HEIGHT_PX = headerNode ? headerNode.offsetHeight : 0;
+
+            const pages = [];
+            let currentPageSections = [];
+            let currentHeight = 0;
+
+            // First page has a header
+            currentHeight += HEADER_HEIGHT_PX;
 
             const sectionNodes = hiddenPreviewRef.current.querySelectorAll('main > section');
 
@@ -138,18 +88,24 @@ const FinalResumePage = () => {
 
                 const sectionHeight = node.offsetHeight;
 
-                if (currentHeight + sectionHeight > A4_HEIGHT_PX - PAGE_MARGIN_PX) {
-                    currentPage++;
-                    pages[currentPage] = [];
-                    currentHeight = 0;
+                // If adding the section exceeds the page height, finalize the current page and start a new one.
+                if (currentHeight + sectionHeight > USABLE_PAGE_HEIGHT_PX && currentPageSections.length > 0) {
+                    pages.push(currentPageSections);
+                    currentPageSections = [];
+                    currentHeight = 0; // Reset height for the new page (no header on subsequent pages)
                 }
 
-                pages[currentPage].push(section);
+                currentPageSections.push(section);
                 currentHeight += sectionHeight;
             });
 
+            // Add the last page
+            if (currentPageSections.length > 0) {
+                pages.push(currentPageSections);
+            }
+
             setPaginatedContent(pages);
-        } else if (orderedSections.length === 0) {
+        } else {
             setPaginatedContent([]);
         }
     }, [orderedSections, contact, summary, experiences, educations, projects, certifications, awards, skills]);
@@ -195,13 +151,17 @@ const FinalResumePage = () => {
     };
 
     const handleDownloadPDF = () => {
-        const doc = new jsPDF('p', 'mm', 'a4');
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: [210, 350]
+        });
         doc.setFont('times');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 15;
+        const margin = 10;
         const contentWidth = pageWidth - margin * 2;
-        let y = 20;
+        let y = 15;
 
         const FONT_SIZE = 10;
         const LINE_SPACING = 1.5;
@@ -231,7 +191,7 @@ const FinalResumePage = () => {
 
         // --- Sections ---
         orderedSections.forEach(section => {
-            checkPageBreak(10); // Check for section header
+            checkPageBreak(10);
             doc.setFont('times', 'bold');
             doc.setFontSize(10);
             doc.text(section.title.toUpperCase(), margin, y);
@@ -255,7 +215,9 @@ const FinalResumePage = () => {
 
                 case 'experience':
                     experiences.forEach(exp => {
-                        checkPageBreak(LINE_HEIGHT * 2 + 1 + PARAGRAPH_SPACING);
+                        const headerHeight = LINE_HEIGHT * 2 + 1;
+                        checkPageBreak(headerHeight + PARAGRAPH_SPACING);
+
                         doc.setFont('times', 'bold');
                         doc.text(exp.role, margin, y);
                         doc.setFont('times', 'normal');
@@ -271,7 +233,9 @@ const FinalResumePage = () => {
                         const bulletPoints = exp.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bulletPoints.forEach(bullet => {
                             const bulletLines = doc.splitTextToSize(bullet, contentWidth - 5);
-                            checkPageBreak(bulletLines.length * LINE_HEIGHT);
+                            const bulletHeight = bulletLines.length * LINE_HEIGHT;
+                            checkPageBreak(bulletHeight);
+
                             bulletLines.forEach((line, index) => {
                                 if (index === 0) {
                                     doc.text('•', margin + 2, y);
@@ -279,9 +243,8 @@ const FinalResumePage = () => {
                                 } else {
                                     doc.text(line, margin + 5, y);
                                 }
-                                if (index < bulletLines.length - 1) y += LINE_HEIGHT;
+                                y += LINE_HEIGHT;
                             });
-                            y += LINE_HEIGHT;
                         });
                         y += PARAGRAPH_SPACING;
                     });
@@ -290,7 +253,8 @@ const FinalResumePage = () => {
                 case 'education':
                     educations.forEach(edu => {
                         const degreeAndMinor = [edu.degree, edu.minor].filter(Boolean).join(', ');
-                        checkPageBreak(LINE_HEIGHT * (edu.gpa ? 3 : 2));
+                        const eduHeaderHeight = LINE_HEIGHT * (edu.gpa ? 3 : 2);
+                        checkPageBreak(eduHeaderHeight + PARAGRAPH_SPACING);
 
                         doc.setFont('times', 'bold');
                         doc.text(edu.school, margin, y);
@@ -312,7 +276,8 @@ const FinalResumePage = () => {
                         const bulletPoints = edu.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bulletPoints.forEach(bullet => {
                             const bulletLines = doc.splitTextToSize(bullet, contentWidth - 5);
-                            checkPageBreak(bulletLines.length * LINE_HEIGHT);
+                            const bulletHeight = bulletLines.length * LINE_HEIGHT;
+                            checkPageBreak(bulletHeight);
                             bulletLines.forEach((line, index) => {
                                 if (index === 0) {
                                     doc.text('•', margin + 2, y);
@@ -320,9 +285,8 @@ const FinalResumePage = () => {
                                 } else {
                                     doc.text(line, margin + 5, y);
                                 }
-                                if (index < bulletLines.length - 1) y += LINE_HEIGHT;
+                                y += LINE_HEIGHT;
                             });
-                            y += LINE_HEIGHT;
                         });
                         y += PARAGRAPH_SPACING;
                     });
@@ -333,7 +297,10 @@ const FinalResumePage = () => {
                 case 'awards':
                     const items = section.id === 'projects' ? projects : section.id === 'certifications' ? certifications : awards;
                     items.forEach(item => {
-                        checkPageBreak(LINE_HEIGHT + PARAGRAPH_SPACING);
+                        const relevanceLines = item.relevance ? doc.splitTextToSize(item.relevance, contentWidth) : [];
+                        const itemHeight = LINE_HEIGHT + (relevanceLines.length * LINE_HEIGHT) + PARAGRAPH_SPACING;
+                        checkPageBreak(itemHeight);
+
                         doc.setFont('times', 'bold');
                         doc.text(`${item.name}${item.organization ? `, ${item.organization}` : ''}`, margin, y);
                         doc.setFont('times', 'normal');
@@ -341,9 +308,7 @@ const FinalResumePage = () => {
                         y += LINE_HEIGHT;
 
                         if (item.relevance) {
-                            const relevanceLines = doc.splitTextToSize(item.relevance, contentWidth);
                             relevanceLines.forEach(line => {
-                                checkPageBreak(LINE_HEIGHT);
                                 doc.text(line, margin, y);
                                 y += LINE_HEIGHT;
                             });
@@ -510,17 +475,24 @@ const FinalResumePage = () => {
 
                 {/* Hidden div for measuring content height */}
                 <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, width: '210mm' }}>
-                    <header className="text-center mb-6 p-12">
-                        <h1 className="text-3xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
-                    </header>
-                    <main className="p-12" style={{ width: '210mm' }}>
-                        {orderedSections.map((section, index) => (
-                            <section key={section.id} data-index={index} className="mt-5 py-2">
-                                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-800 border-b border-black pb-1 mb-3">{section.title}</h2>
-                                {renderSectionContent(section)}
-                            </section>
-                        ))}
-                    </main>
+                    <div className="bg-white text-black p-8 font-serif" style={{ width: '210mm', minHeight: '350mm' }}>
+
+                        <header className="text-center mb-6">
+                            <h1 className="text-3xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
+                            <div className="text-xs text-gray-700 mt-2">
+                                <p>{[locationString, contact.email, phoneNumber, linkedIn].filter(Boolean).join(' | ')}</p>
+                            </div>
+                        </header>
+                        <main>
+                            {orderedSections.map((section, index) => (
+                                <section key={section.id} data-index={index} className="mt-5 py-2">
+                                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-800 border-b border-black pb-1 mb-3">{section.title}</h2>
+                                    {renderSectionContent(section)}
+                                </section>
+                            ))}
+                        </main>
+                    </div>
+
                 </div>
             </div>
         </div>

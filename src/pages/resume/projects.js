@@ -36,13 +36,6 @@ const ProjectItem = ({ project, index, onUpdate, onDelete, onSave }) => {
                     onChange={handleInputChange}
                     placeholder="Project Name"
                 />
-                <FormInput
-                    label={`Who was this project for?`}
-                    name="organization"
-                    value={project.organization}
-                    onChange={handleInputChange}
-                    placeholder="Company or Organization"
-                />
                 <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">When did you work on this project?</label>
                     <DatePicker

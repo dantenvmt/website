@@ -11,7 +11,7 @@ const EditorLayout = ({ children }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-    const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Summary'];
+    const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
 
     const handleFinish = () => {
         navigate('/resume/final', { state: { resumeName } });

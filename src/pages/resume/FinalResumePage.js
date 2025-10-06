@@ -1,11 +1,26 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
+import jsPDF from 'jspdf';
+import AIKeywordAnalysis from '../../components/resume/AIKeywordAnalysis'; // Import the new component
+
+// --- Helper component to render a single page ---
+const ResumePage = ({ children, pageNumber, totalPages }) => (
+    <div className="bg-white text-black p-8 font-serif shadow-lg my-4 relative" style={{ width: '210mm', minHeight: '350mm' }}>
+        {children}
+        {totalPages > 1 && (
+            <div className="absolute bottom-4 right-4 text-xs text-gray-500">
+                Page {pageNumber} of {totalPages}
+            </div>
+        )}
+    </div>
+);
 
 // --- Draggable Section Wrapper ---
-const DraggableResumeSection = ({ title, children, onDragStart, onDrop, onDragEnd, onDragOver, index, isDraggedItem }) => {
+const DraggableResumeSection = ({ title, children, onDragStart, onDrop, onDragEnd, onDragOver, index, isDraggedItem, ...props }) => {
     return (
         <section
+            {...props}
             draggable="true"
             onDragStart={(e) => onDragStart(e, index)}
             onDrop={(e) => onDrop(e, index)}
@@ -26,26 +41,86 @@ const DraggableResumeSection = ({ title, children, onDragStart, onDrop, onDragEn
 
 // --- Main Page Component ---
 const FinalResumePage = () => {
-    const { contact, contactToggles, summary, experiences, educations, certifications, awards, skills } = useResume();
-    const resumePdfRef = useRef();
+    const { contact, contactToggles, summary, experiences, educations, certifications, awards, skills, projects } = useResume();
     const navigate = useNavigate();
-
+    const hiddenPreviewRef = useRef();
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
     const [orderedSections, setOrderedSections] = useState([]);
     const [isDragging, setIsDragging] = useState(false);
+    const [paginatedContent, setPaginatedContent] = useState([]);
 
     useEffect(() => {
         const allSections = [
             { id: 'summary', title: 'Summary', condition: summary && summary.trim() !== '' },
             { id: 'experience', title: 'Experience', condition: experiences && experiences.length > 0 && experiences.some(exp => exp.role || exp.company) },
             { id: 'education', title: 'Education', condition: educations && educations.length > 0 && educations.some(edu => edu.degree || edu.school) },
+            { id: 'projects', title: 'Projects', condition: projects && projects.length > 0 && projects.some(proj => proj.name) },
             { id: 'certifications', title: 'Certifications', condition: certifications && certifications.length > 0 && certifications.some(cert => cert.name) },
             { id: 'awards', title: 'Awards', condition: awards && awards.length > 0 && awards.some(award => award.name) },
             { id: 'skills', title: 'Skills', condition: skills && skills.trim() !== '' },
         ];
         setOrderedSections(allSections.filter(section => section.condition));
-    }, [contact, summary, experiences, educations, certifications, awards, skills]);
+    }, [contact, summary, experiences, educations, certifications, awards, skills, projects]);
+
+    // --- Pagination logic for PREVIEW (breaks between sections) ---
+    useEffect(() => {
+        if (hiddenPreviewRef.current && orderedSections.length > 0) {
+            const PAGE_HEIGHT_PX = 1322.8; // Corresponds to 350mm
+            const PAGE_MARGIN_PX = 64;    // Corresponds to p-8 (32px top + 32px bottom)
+            const USABLE_PAGE_HEIGHT_PX = PAGE_HEIGHT_PX - PAGE_MARGIN_PX;
+
+            const headerNode = hiddenPreviewRef.current.querySelector('header');
+            const HEADER_HEIGHT_PX = headerNode ? headerNode.offsetHeight : 0;
+
+            const pages = [];
+            let currentPageSections = [];
+            let currentHeight = 0;
+
+            // First page has a header
+            currentHeight += HEADER_HEIGHT_PX;
+
+            const sectionNodes = hiddenPreviewRef.current.querySelectorAll('main > section');
+
+            sectionNodes.forEach((node, index) => {
+                const section = orderedSections[index];
+                if (!section) return;
+
+                const sectionHeight = node.offsetHeight;
+
+                // If adding the section exceeds the page height, finalize the current page and start a new one.
+                if (currentHeight + sectionHeight > USABLE_PAGE_HEIGHT_PX && currentPageSections.length > 0) {
+                    pages.push(currentPageSections);
+                    currentPageSections = [];
+                    currentHeight = 0; // Reset height for the new page (no header on subsequent pages)
+                }
+
+                currentPageSections.push(section);
+                currentHeight += sectionHeight;
+            });
+
+            // Add the last page
+            if (currentPageSections.length > 0) {
+                pages.push(currentPageSections);
+            }
+
+            setPaginatedContent(pages);
+        } else {
+            setPaginatedContent([]);
+        }
+    }, [orderedSections, contact, summary, experiences, educations, projects, certifications, awards, skills]);
+
+
+    const formatPhoneNumber = (phoneNum) => {
+        const cleaned = ('' + phoneNum).replace(/\D/g, '');
+        const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+        if (match) return `(${match[1]}) ${match[2]}-${match[3]}`;
+        return phoneNum;
+    };
+
+    const locationString = [contactToggles.city && contact.city, contactToggles.state && contact.state, contactToggles.country && contact.country].filter(Boolean).join(', ');
+    const phoneNumber = contactToggles.phone ? formatPhoneNumber(contact.phone) : '';
+    const linkedIn = (contactToggles.linkedin && contact.linkedin) ? `linkedin.com/in/${contact.linkedin}` : '';
 
     const handleDragStart = (e, position) => {
         dragItem.current = position;
@@ -75,9 +150,191 @@ const FinalResumePage = () => {
         handleDragEnd();
     };
 
-    const handleDownloadPDF = () => { alert('PDF download functionality will be implemented soon!'); };
+    const handleDownloadPDF = () => {
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: [210, 350]
+        });
+        doc.setFont('times');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+        const contentWidth = pageWidth - margin * 2;
+        let y = 15;
+
+        const FONT_SIZE = 10;
+        const LINE_SPACING = 1.5;
+        const PARAGRAPH_SPACING = 3;
+        const SECTION_SPACING = 6;
+        const LINE_HEIGHT = FONT_SIZE * 0.35 * LINE_SPACING;
+
+        const checkPageBreak = (neededHeight) => {
+            if (y + neededHeight > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+            }
+        };
+
+        // --- Header ---
+        doc.setFont('times', 'bold');
+        doc.setFontSize(28);
+        doc.text(contact.fullName || "Your Name", pageWidth / 2, y, { align: 'center' });
+        y += (doc.getTextDimensions(contact.fullName).h * 0.5) + 2;
+
+        doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        const contactItems = [locationString, contact.email, phoneNumber, linkedIn].filter(Boolean);
+        const contactLine = contactItems.join('   |   ');
+        doc.text(contactLine, pageWidth / 2, y, { align: 'center' });
+        y += SECTION_SPACING + 4;
+
+        // --- Sections ---
+        orderedSections.forEach(section => {
+            checkPageBreak(10);
+            doc.setFont('times', 'bold');
+            doc.setFontSize(10);
+            doc.text(section.title.toUpperCase(), margin, y);
+            y += 1;
+            doc.setLineWidth(0.1);
+            doc.line(margin, y, pageWidth - margin, y);
+            y += 5;
+
+            doc.setFont('times', 'normal');
+            doc.setFontSize(FONT_SIZE);
+
+            switch (section.id) {
+                case 'summary':
+                    const summaryLines = doc.splitTextToSize(summary, contentWidth);
+                    summaryLines.forEach(line => {
+                        checkPageBreak(LINE_HEIGHT);
+                        doc.text(line, margin, y);
+                        y += LINE_HEIGHT;
+                    });
+                    break;
+
+                case 'experience':
+                    experiences.forEach(exp => {
+                        const headerHeight = LINE_HEIGHT * 2 + 1;
+                        checkPageBreak(headerHeight + PARAGRAPH_SPACING);
+
+                        doc.setFont('times', 'bold');
+                        doc.text(exp.role, margin, y);
+                        doc.setFont('times', 'normal');
+                        doc.text(`${exp.startDate}${exp.endDate ? ` – ${exp.endDate}` : ''}`, pageWidth - margin, y, { align: 'right' });
+                        y += LINE_HEIGHT;
+
+                        doc.setFont('times', 'italic');
+                        doc.text(exp.company, margin, y);
+                        doc.setFont('times', 'normal');
+                        doc.text(exp.location, pageWidth - margin, y, { align: 'right' });
+                        y += LINE_HEIGHT + 1;
+
+                        const bulletPoints = exp.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
+                        bulletPoints.forEach(bullet => {
+                            const bulletLines = doc.splitTextToSize(bullet, contentWidth - 5);
+                            const bulletHeight = bulletLines.length * LINE_HEIGHT;
+                            checkPageBreak(bulletHeight);
+
+                            bulletLines.forEach((line, index) => {
+                                if (index === 0) {
+                                    doc.text('•', margin + 2, y);
+                                    doc.text(line, margin + 5, y);
+                                } else {
+                                    doc.text(line, margin + 5, y);
+                                }
+                                y += LINE_HEIGHT;
+                            });
+                        });
+                        y += PARAGRAPH_SPACING;
+                    });
+                    break;
+
+                case 'education':
+                    educations.forEach(edu => {
+                        const degreeAndMinor = [edu.degree, edu.minor].filter(Boolean).join(', ');
+                        const eduHeaderHeight = LINE_HEIGHT * (edu.gpa ? 3 : 2);
+                        checkPageBreak(eduHeaderHeight + PARAGRAPH_SPACING);
+
+                        doc.setFont('times', 'bold');
+                        doc.text(edu.school, margin, y);
+                        doc.setFont('times', 'normal');
+                        doc.text(`${edu.startDate}${edu.endDate ? ` – ${edu.endDate}` : ''}`, pageWidth - margin, y, { align: 'right' });
+                        y += LINE_HEIGHT;
+
+                        doc.setFont('times', 'italic');
+                        doc.text(degreeAndMinor, margin, y);
+                        doc.setFont('times', 'normal');
+                        doc.text(edu.location, pageWidth - margin, y, { align: 'right' });
+                        y += LINE_HEIGHT;
+
+                        if (edu.gpa) {
+                            doc.text(`GPA: ${edu.gpa}`, margin, y);
+                            y += LINE_HEIGHT;
+                        }
+
+                        const bulletPoints = edu.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
+                        bulletPoints.forEach(bullet => {
+                            const bulletLines = doc.splitTextToSize(bullet, contentWidth - 5);
+                            const bulletHeight = bulletLines.length * LINE_HEIGHT;
+                            checkPageBreak(bulletHeight);
+                            bulletLines.forEach((line, index) => {
+                                if (index === 0) {
+                                    doc.text('•', margin + 2, y);
+                                    doc.text(line, margin + 5, y);
+                                } else {
+                                    doc.text(line, margin + 5, y);
+                                }
+                                y += LINE_HEIGHT;
+                            });
+                        });
+                        y += PARAGRAPH_SPACING;
+                    });
+                    break;
+
+                case 'projects':
+                case 'certifications':
+                case 'awards':
+                    const items = section.id === 'projects' ? projects : section.id === 'certifications' ? certifications : awards;
+                    items.forEach(item => {
+                        const relevanceLines = item.relevance ? doc.splitTextToSize(item.relevance, contentWidth) : [];
+                        const itemHeight = LINE_HEIGHT + (relevanceLines.length * LINE_HEIGHT) + PARAGRAPH_SPACING;
+                        checkPageBreak(itemHeight);
+
+                        doc.setFont('times', 'bold');
+                        doc.text(`${item.name}${item.organization ? `, ${item.organization}` : ''}`, margin, y);
+                        doc.setFont('times', 'normal');
+                        doc.text(item.date, pageWidth - margin, y, { align: 'right' });
+                        y += LINE_HEIGHT;
+
+                        if (item.relevance) {
+                            relevanceLines.forEach(line => {
+                                doc.text(line, margin, y);
+                                y += LINE_HEIGHT;
+                            });
+                        }
+                        y += PARAGRAPH_SPACING;
+                    });
+                    break;
+
+                case 'skills':
+                    const skillsLines = doc.splitTextToSize(skills, contentWidth);
+                    skillsLines.forEach(line => {
+                        checkPageBreak(LINE_HEIGHT);
+                        doc.text(line, margin, y);
+                        y += LINE_HEIGHT;
+                    });
+                    break;
+                default: break;
+            }
+            y += SECTION_SPACING;
+        });
+
+        doc.save(`${contact.fullName.replace(/\s/g, '_') || 'Resume'}.pdf`);
+    };
 
     const renderSectionContent = (section) => {
+        // This function remains unchanged
         switch (section.id) {
             case 'summary':
                 return <p className="text-sm text-gray-800 leading-relaxed">{summary}</p>;
@@ -101,25 +358,65 @@ const FinalResumePage = () => {
                     </div>
                 ));
             case 'education':
-                return educations.map(edu => (
-                    <div key={edu.id} className="mb-3">
-                        <div className="flex justify-between items-baseline">
-                            <h3 className="text-md font-bold text-gray-900">{edu.school}</h3>
-                            <p className="text-xs font-normal text-gray-700">{edu.startDate}{edu.endDate && ` – ${edu.endDate}`}</p>
+                return educations.map(edu => {
+                    const degreeAndMinor = [edu.degree, edu.minor].filter(Boolean).join(', ');
+                    return (
+                        <div key={edu.id} className="mb-4 last:mb-0">
+                            <div className="flex justify-between items-baseline">
+                                <h3 className="text-md font-bold text-gray-900">{edu.school}</h3>
+                                <p className="text-xs font-normal text-gray-700">{edu.startDate}{edu.endDate && ` – ${edu.endDate}`}</p>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                                <p className="text-sm italic text-gray-800">{degreeAndMinor}</p>
+                                <p className="text-xs font-normal text-gray-700">{edu.location}</p>
+                            </div>
+                            {edu.gpa && (<p className="text-sm text-gray-800 mt-1">{`GPA: ${edu.gpa}`}</p>)}
+                            {edu.bullets && edu.bullets.trim().replace(/^•\s*/, '') && (
+                                <ul className="mt-2 text-sm text-gray-800 list-disc pl-5 space-y-1 leading-relaxed">
+                                    {edu.bullets.split('\n').map((line, i) => {
+                                        const cleanedLine = line.trim().replace(/^•\s*/, '');
+                                        return cleanedLine && <li key={i}>{cleanedLine}</li>;
+                                    })}
+                                </ul>
+                            )}
                         </div>
-                        <div className="flex justify-between items-baseline">
-                            <p className="text-sm italic text-gray-800">{edu.degree}</p>
-                            <p className="text-xs font-normal text-gray-700">{edu.location}</p>
+                    );
+                });
+            case 'projects':
+                return projects.map(proj => (
+                    proj.name && (
+                        <div key={proj.id} className="mb-3">
+                            <div className="flex justify-between items-baseline">
+                                <h3 className="text-md font-bold text-gray-900">{proj.name}{proj.organization && `, ${proj.organization}`}</h3>
+                                {proj.date && (<p className="text-xs font-normal text-gray-700">{proj.date}</p>)}
+                            </div>
+                            {proj.relevance && (<p className="text-sm text-gray-800 mt-1">{proj.relevance}</p>)}
                         </div>
-                    </div>
+                    )
                 ));
             case 'certifications':
                 return certifications.map(cert => (
-                    cert.name && <p key={cert.id} className="text-sm text-gray-800">{cert.name}{cert.organization && `, ${cert.organization}`}</p>
+                    cert.name && (
+                        <div key={cert.id} className="mb-3">
+                            <div className="flex justify-between items-baseline">
+                                <h3 className="text-md font-bold text-gray-900">{cert.name}{cert.organization && `, ${cert.organization}`}</h3>
+                                {cert.date && (<p className="text-xs font-normal text-gray-700">{cert.date}</p>)}
+                            </div>
+                            {cert.relevance && (<p className="text-sm text-gray-800 mt-1">{cert.relevance}</p>)}
+                        </div>
+                    )
                 ));
             case 'awards':
                 return awards.map(award => (
-                    award.name && <p key={award.id} className="text-sm text-gray-800">{award.name}{award.organization && `, ${award.organization}`}</p>
+                    award.name && (
+                        <div key={award.id} className="mb-3">
+                            <div className="flex justify-between items-baseline">
+                                <h3 className="text-md font-bold text-gray-900">{award.name}{award.organization && `, ${award.organization}`}</h3>
+                                {award.date && (<p className="text-xs font-normal text-gray-700">{award.date}</p>)}
+                            </div>
+                            {award.relevance && (<p className="text-sm text-gray-800 mt-1">{award.relevance}</p>)}
+                        </div>
+                    )
                 ));
             case 'skills':
                 return <p className="text-sm text-gray-800">{skills}</p>;
@@ -128,20 +425,8 @@ const FinalResumePage = () => {
         }
     };
 
-    const locationString = [
-        contactToggles.city && contact.city,
-        contactToggles.state && contact.state,
-        contactToggles.country && contact.country,
-    ].filter(Boolean).join(', ');
-
-    const phoneNumber = [
-        contactToggles.phone && contact.phone
-    ].filter(Boolean);
-    const LinkedInAddress = [
-        contactToggles.linkedin && contact.linkedin
-    ].filter(Boolean);
     return (
-        <div className="bg-[#0f172a] text-white min-h-screen p-4 sm:p-8">
+        <div className="text-white min-h-screen p-4 sm:p-8">
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
                     <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-400 hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors">
@@ -152,66 +437,62 @@ const FinalResumePage = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div
-                        className={`lg:col-span-2 bg-white text-black p-8 sm:p-12 font-serif transition-all duration-300 rounded-lg ${isDragging ? 'border-2 border-dashed border-blue-500' : 'border-2 border-transparent'}`}
-                        ref={resumePdfRef}
-                        onDrop={handleDrop}
-                        onDragOver={(e) => e.preventDefault()}
-                    >
+                    <div className="lg:col-span-2 bg-gray-200 p-4 sm:p-8 rounded-lg flex flex-col items-center overflow-x-auto">
+                        {paginatedContent.map((pageSections, pageIndex) => (
+                            <ResumePage key={pageIndex} pageNumber={pageIndex + 1} totalPages={paginatedContent.length}>
+                                {pageIndex === 0 && (
+                                    <header className="text-center mb-6">
+                                        <h1 className="text-3xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
+                                        <div className="text-xs text-gray-700 mt-2">
+                                            <p>{[locationString, contact.email, phoneNumber, linkedIn].filter(Boolean).join('   |   ')}</p>
+                                        </div>
+                                    </header>
+                                )}
+                                <main>
+                                    {pageSections.map((section) => (
+                                        <DraggableResumeSection
+                                            key={section.id}
+                                            title={section.title}
+                                            index={orderedSections.findIndex(s => s.id === section.id)}
+                                            onDragStart={(e) => handleDragStart(e, orderedSections.findIndex(s => s.id === section.id))}
+                                            onDrop={handleDrop}
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, orderedSections.findIndex(s => s.id === section.id)); }}
+                                            isDraggedItem={isDragging && dragItem.current === orderedSections.findIndex(s => s.id === section.id)}
+                                        >
+                                            {renderSectionContent(section)}
+                                        </DraggableResumeSection>
+                                    ))}
+                                </main>
+                            </ResumePage>
+                        ))}
+                    </div>
+
+                    <div className="lg:col-span-1 space-y-8">
+                        <AIKeywordAnalysis />
+                    </div>
+                </div>
+
+                {/* Hidden div for measuring content height */}
+                <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, width: '210mm' }}>
+                    <div className="bg-white text-black p-8 font-serif" style={{ width: '210mm', minHeight: '350mm' }}>
+
                         <header className="text-center mb-6">
                             <h1 className="text-3xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
-                            <hr className="my-2 border-t border-black" />
-                            <div className="text-xs text-gray-700 mt-2 flex justify-center items-center flex-wrap gap-x-4 gap-y-1">
-                                {locationString && (
-                                    <span className="flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
-                                        {locationString}
-                                    </span>
-                                )}
-                                {contact.email && (
-                                    <span className="flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
-                                        {contact.email}
-                                    </span>
-                                )}
-                                {phoneNumber && (
-                                    <span className="flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path clipRule="evenodd" fillRule="evenodd" d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                                        {phoneNumber}
-                                    </span>
-                                )}
-                                {LinkedInAddress && (
-                                    <a href={`https://linkedin.com/in/${contact.linkedin}`} target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-700 hover:text-blue-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 24 24" fill="currentColor"><path clipRule="evenodd" fillRule="evenodd" d="M21.25 2H2.75C2.336 2 2 2.336 2 2.75v18.5C2 21.664 2.336 22 2.75 22h18.5c.414 0 .75-.336.75-.75V2.75c0-.414-.336-.75-.75-.75zM8.29 18.995H5.45V9.72h2.84v9.275zM6.87 8.507c-.9 0-1.63-.73-1.63-1.63s.73-1.63 1.63-1.63 1.63.73 1.63 1.63-.73 1.63-1.63 1.63zm12.125 10.488h-2.84V14.3c0-.88-.015-2.01-1.225-2.01s-1.415.955-1.415 1.945v4.76h-2.84V9.72h2.725v1.24h.04c.375-.71 1.29-1.45 2.685-1.45 2.875 0 3.405 1.89 3.405 4.35v4.99z" /></svg>
-                                        linkedin.com/in/{LinkedInAddress}
-                                    </a>
-                                )}
+                            <div className="text-xs text-gray-700 mt-2">
+                                <p>{[locationString, contact.email, phoneNumber, linkedIn].filter(Boolean).join(' | ')}</p>
                             </div>
                         </header>
                         <main>
                             {orderedSections.map((section, index) => (
-                                <DraggableResumeSection
-                                    key={section.id}
-                                    title={section.title}
-                                    index={index}
-                                    onDragStart={(e) => handleDragStart(e, index)}
-                                    onDrop={handleDrop}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, index); }}
-                                    isDraggedItem={isDragging && dragItem.current === index}
-                                >
+                                <section key={section.id} data-index={index} className="mt-5 py-2">
+                                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-800 border-b border-black pb-1 mb-3">{section.title}</h2>
                                     {renderSectionContent(section)}
-                                </DraggableResumeSection>
+                                </section>
                             ))}
                         </main>
                     </div>
 
-                    <div className="lg:col-span-1 space-y-8">
-                        <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6 text-center">
-                            <h3 className="font-bold text-lg">AI Keyword Targeting</h3>
-                            <p className="text-sm text-gray-400 mt-2">Optimize your resume with important keywords from the job description.</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -219,4 +500,3 @@ const FinalResumePage = () => {
 };
 
 export default FinalResumePage;
-

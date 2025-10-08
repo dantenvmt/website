@@ -23,6 +23,8 @@ import Awards from './pages/resume/awards';
 import Certificates from './pages/resume/certifications';
 import Summary from './pages/resume/summary';
 import FinalResumePage from './pages/resume/FinalResumePage';
+import JobBoard from './pages/job-board/JobBoard';
+
 import Projects from './pages/resume/projects';
 
 
@@ -64,6 +66,8 @@ export default function App() {
         <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
 
         <Route path="resume/*" element={<ResumeRoutes />} />
+
+        <Route path='job_board' element={<JobBoard />} />
       </Route>
     </Routes>
   );

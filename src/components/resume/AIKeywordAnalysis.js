@@ -7,7 +7,6 @@ const AIKeywordAnalysis = () => {
 
     useEffect(() => {
         if (jobDescription) {
-            // This is a placeholder to simulate the AI results
             const analysisData = {
                 score: 85,
                 matchingKeywords: [
@@ -22,7 +21,6 @@ const AIKeywordAnalysis = () => {
                 recommendation: 'Add a project or skill demonstrating experience with AWS, GCP, or Azure.'
             };
             setAiAnalysis(analysisData);
-            // Set the first keyword as selected by default
             setSelectedKeyword(analysisData.matchingKeywords[0] || analysisData.missingKeywords[0] || null);
         }
     }, [jobDescription, setAiAnalysis]);
@@ -36,6 +34,30 @@ const AIKeywordAnalysis = () => {
             </div>
         );
     }
+
+    const KeywordDetails = ({ keyword }) => (
+        <div className="bg-gray-800 rounded-lg p-4 mt-4 min-h-[150px]">
+            <h3 className="font-bold text-lg mb-2 text-white">{keyword.keyword}</h3>
+            <div className="text-sm text-gray-400 space-y-4">
+                {keyword.resume_mentions && keyword.resume_mentions.length > 0 && (
+                    <div>
+                        <p className="font-semibold text-gray-300">Found in your resume:</p>
+                        <ul className="list-disc pl-5 mt-1 space-y-1">
+                            {keyword.resume_mentions.map((mention, i) => <li key={i}>{mention}</li>)}
+                        </ul>
+                    </div>
+                )}
+                {keyword.jd_mentions && keyword.jd_mentions.length > 0 && (
+                    <div>
+                        <p className="font-semibold text-gray-300">Mentioned in the job description:</p>
+                        <ul className="list-disc pl-5 mt-1 space-y-1">
+                            {keyword.jd_mentions.map((mention, i) => <li key={i}>{mention}</li>)}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-6 text-left">
@@ -59,6 +81,9 @@ const AIKeywordAnalysis = () => {
                         </button>
                     ))}
                 </div>
+                {selectedKeyword && selectedKeyword.type === 'matching' && (
+                    <KeywordDetails keyword={selectedKeyword} />
+                )}
             </div>
 
             <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6">
@@ -74,31 +99,10 @@ const AIKeywordAnalysis = () => {
                         </button>
                     ))}
                 </div>
+                {selectedKeyword && selectedKeyword.type === 'missing' && (
+                    <KeywordDetails keyword={selectedKeyword} />
+                )}
             </div>
-
-            {selectedKeyword && (
-                <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6 min-h-[200px]">
-                    <h3 className="font-bold text-lg mb-4 text-white">{selectedKeyword.keyword}</h3>
-                    <div className="text-sm text-gray-400 space-y-4">
-                        {selectedKeyword.resume_mentions && selectedKeyword.resume_mentions.length > 0 && (
-                            <div>
-                                <p className="font-semibold text-gray-300">Found in your resume:</p>
-                                <ul className="list-disc pl-5 mt-1 space-y-1">
-                                    {selectedKeyword.resume_mentions.map((mention, i) => <li key={i}>{mention}</li>)}
-                                </ul>
-                            </div>
-                        )}
-                        {selectedKeyword.jd_mentions && selectedKeyword.jd_mentions.length > 0 && (
-                            <div>
-                                <p className="font-semibold text-gray-300">Mentioned in the job description:</p>
-                                <ul className="list-disc pl-5 mt-1 space-y-1">
-                                    {selectedKeyword.jd_mentions.map((mention, i) => <li key={i}>{mention}</li>)}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
 
             <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-6">
                 <h3 className="font-bold text-lg mb-2">Analysis & Recommendation</h3>

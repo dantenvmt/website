@@ -5,7 +5,7 @@ import './App.css';
 import MainLayout from './components/layout/MainLayout';
 import { ResumeProvider } from './context/ResumeContext';
 import EditorLayout from './components/resume/EditorLayout';
-
+import { AuthProvider } from './context/AuthContext';
 // --- Page Components ---
 import HomePage from './pages/HomePage';
 import GenericPage from './pages/GenericPage';
@@ -27,16 +27,28 @@ import Summary from './pages/resume/summary';
 import FinalResumePage from './pages/resume/FinalResumePage';
 import JobBoard from './pages/job-board/JobBoard';
 import Projects from './pages/resume/projects';
-import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import LoginPage from './pages/auth/LoginPage';
-
+import AdminRoute from './components/auth/AdminRoute';
+import AdminPage from './pages/admin/AdminPage';
+import NotFoundPage from './pages/NotFoundPage';
+import UserStatusPage from './pages/user/UserStatusPage';
 export default function App() {
   return (
     <AuthProvider>
       <ResumeProvider>
         <Routes>
           <Route path="/" element={<MainLayout />}>
+            <Route
+              path="admin"
+              element={
+                <AdminRoute> {/* <-- USE AdminRoute */}
+                  <AdminPage />
+                </AdminRoute>
+              }
+            />
+
+            <Route path="*" element={<NotFoundPage />} />
             {/* --- Main Site Routes --- */}
             <Route index element={<HomePage />} />
             <Route path="research" element={<Navigate to="/research/index" replace />} />
@@ -68,6 +80,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="resume/:resumeId"
               element={
@@ -94,7 +107,18 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* --- NEW User Status Route --- */}
+            <Route
+              path="my-status"
+              element={
+                <ProtectedRoute> {/* Use regular ProtectedRoute */}
+                  <UserStatusPage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
+          {/* --- Admin Route --- */}
+
         </Routes>
       </ResumeProvider>
     </AuthProvider>

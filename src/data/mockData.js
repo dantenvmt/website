@@ -5,6 +5,8 @@ export const navLinks = [
     { id: 'job_board', title: 'Job Board' },
     { id: 'company', title: 'Company' },
     { id: 'faq', title: 'FAQ' },
+    { id: 'admin', title: 'Admin', adminOnly: true },
+    { id: 'my-status', title: 'My Status', userOnly: true }
 
 ];
 

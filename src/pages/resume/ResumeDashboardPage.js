@@ -20,13 +20,17 @@ const ResumeDashboardPage = () => {
     useEffect(() => {
         const fetchResumes = async () => {
             try {
-                const response = await fetch('https://renaisons.com/api/get_resumes.php');
+                const response = await fetch('https://renaisons.com/api/get_resumes.php',
+                    {
+                        credentials: 'include',
+                    });
                 const data = await response.json();
 
                 if (data.status === 'success') {
                     // Sort the fetched resumes by date initially
                     const sorted = data.resumes.sort((a, b) => new Date(b.last_edited) - new Date(a.last_edited));
                     setResumes(sorted);
+
                 } else {
                     console.error("Failed to fetch resumes:", data.message);
                 }

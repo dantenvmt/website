@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { navLinks, subNavLinks } from '../../data/mockData';
 import { Link } from 'react-router-dom';
-
+import { useAuth } from '../../context/AuthContext';
 // --- Icon Components ---
 const ToggleIconOpen = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -40,21 +40,38 @@ const NavHeader = ({ isDesktopNavOpen, onToggle }) => (
     </div>
 );
 
-const MainNavPanel = ({ handleNavClick }) => (
+const MainNavPanel = ({ handleNavClick, user }) => (
     <nav className="flex flex-col space-y-2">
-        {navLinks.map(link => (
-            <Link
-                key={link.id}
-                to={link.id === 'home' ? '/' : `/${link.id}`}
-                onClick={() => handleNavClick(link)}
-                className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
-            >
-                <span>{link.title}</span>
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowIcon />
-                </span>
-            </Link>
-        ))}
+        {navLinks
+            .filter(link => {
+                // Always show if no specific role is required
+                if (!link.adminOnly && !link.userOnly) {
+                    return true;
+                }
+                // Show admin links only if user is admin
+                if (link.adminOnly && user && user.role === 'admin') {
+                    return true;
+                }
+                // Show user links only if user is a regular user
+                if (link.userOnly && user && user.role === 'user') {
+                    return true;
+                }
+                // Otherwise, hide the link
+                return false;
+            })
+            .map(link => (
+                <Link
+                    key={link.id}
+                    to={link.id === 'home' ? '/' : `/${link.id}`}
+                    onClick={() => handleNavClick(link)}
+                    className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                >
+                    <span>{link.title}</span>
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ArrowIcon />
+                    </span>
+                </Link>
+            ))}
     </nav>
 );
 
@@ -102,7 +119,7 @@ const SubNavPanel = ({ subNavData, onBack, handleSubNavClick, activeSubPage, par
 const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpen }) => {
     const [activeSubNav, setActiveSubNav] = useState(null);
     const [activeSubPage, setActiveSubPage] = useState(null);
-
+    const { user } = useAuth();
     const handleNavClick = (link) => {
         if (subNavLinks[link.id]) {
             setActiveSubNav(link.id);
@@ -129,7 +146,7 @@ const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpe
                 <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 opacity-100`}>
                     <div className="relative flex-grow">
                         <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
-                            <MainNavPanel handleNavClick={handleNavClick} />
+                            <MainNavPanel handleNavClick={handleNavClick} user={user} />
                         </div>
                         <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? 'translate-x-0' : 'translate-x-full'}`}>
                             {activeSubNav && (
@@ -160,7 +177,7 @@ const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpe
                 <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 ${isDesktopNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                     <div className="relative flex-grow">
                         <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
-                            <MainNavPanel handleNavClick={handleNavClick} />
+                            <MainNavPanel handleNavClick={handleNavClick} user={user} /> {/* Pass user */}
                         </div>
                         <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? 'translate-x-0' : 'translate-x-full'}`}>
                             {activeSubNav && (

@@ -27,53 +27,76 @@ import Summary from './pages/resume/summary';
 import FinalResumePage from './pages/resume/FinalResumePage';
 import JobBoard from './pages/job-board/JobBoard';
 import Projects from './pages/resume/projects';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import LoginPage from './pages/auth/LoginPage';
 
 export default function App() {
   return (
-    // Wrap all routes that need resume data in the provider
-    <ResumeProvider>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          {/* --- Main Site Routes --- */}
-          <Route index element={<HomePage />} />
-          <Route path="research" element={<Navigate to="/research/index" replace />} />
-          <Route path="research/index" element={<ResearchPage />} />
-          <Route path="research/overview" element={<GenericPage title="Research Overview" />} />
-          <Route path="research/residency" element={<GenericPage title="Research Residency" />} />
+    <AuthProvider>
+      <ResumeProvider>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            {/* --- Main Site Routes --- */}
+            <Route index element={<HomePage />} />
+            <Route path="research" element={<Navigate to="/research/index" replace />} />
+            <Route path="research/index" element={<ResearchPage />} />
+            <Route path="research/overview" element={<GenericPage title="Research Overview" />} />
+            <Route path="research/residency" element={<GenericPage title="Research Residency" />} />
 
-          <Route path="company" element={<Navigate to="/company/about-us" replace />} />
-          <Route path="company/about-us" element={<AboutPage />} />
-          <Route path="company/careers" element={<CareersPage />} />
-          <Route path="company/careers/search" element={<CareerSearchPage />} />
-          <Route path="company/contact" element={<ContactPage />} />
-          <Route path="company/terms-and-privacy" element={<GenericPage title="Terms & Privacy" />} />
+            <Route path="company" element={<Navigate to="/company/about-us" replace />} />
+            <Route path="company/about-us" element={<AboutPage />} />
+            <Route path="company/careers" element={<CareersPage />} />
+            <Route path="company/careers/search" element={<CareerSearchPage />} />
+            <Route path="company/contact" element={<ContactPage />} />
+            <Route path="company/terms-and-privacy" element={<GenericPage title="Terms & Privacy" />} />
 
-          <Route path="company/careers/jobs/:jobId" element={<JobDescriptionPage />} />
-          <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
+            <Route path="company/careers/jobs/:jobId" element={<JobDescriptionPage />} />
+            <Route path="company/careers/jobs/:jobId/apply" element={<ApplyPage />} />
 
-          <Route path='job_board' element={<JobBoard />} />
+            <Route path='job_board' element={<JobBoard />} />
 
-          {/* --- Resume Routes --- */}
-          {/* The main dashboard for resumes */}
-          <Route path="resume" element={<ResumeDashboardPage />} />
+            <Route path="login" element={<LoginPage />} />
 
-          {/* The layout for the resume editor, which captures the resumeId */}
-          <Route path="resume/:resumeId" element={<EditorLayout />}>
-            {/* Nested routes for each editor section */}
-            <Route path="contact" element={<Contact />} />
-            <Route path="experience" element={<Experience />} />
-            <Route path="education" element={<Education />} />
-            <Route path="skills" element={<Skills />} />
-            <Route path="awards" element={<Awards />} />
-            <Route path="certifications" element={<Certificates />} />
-            <Route path="projects" element={<Projects />} />
-            <Route path="summary" element={<Summary />} />
+            {/* --- Resume Routes --- */}
+            {/* The main dashboard for resumes */}
+            <Route
+              path="resume"
+              element={
+                <ProtectedRoute>
+                  <ResumeDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="resume/:resumeId"
+              element={
+                <ProtectedRoute>
+                  <EditorLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="contact" element={<Contact />} />
+              <Route path="experience" element={<Experience />} />
+              <Route path="education" element={<Education />} />
+              <Route path="skills" element={<Skills />} />
+              <Route path="awards" element={<Awards />} />
+              <Route path="certifications" element={<Certificates />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="summary" element={<Summary />} />
+            </Route>
+
+            <Route
+              path="resume/:resumeId/final"
+              element={
+                <ProtectedRoute>
+                  <FinalResumePage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
-
-          {/* The final preview page, which also needs the resumeId */}
-          <Route path="resume/:resumeId/final" element={<FinalResumePage />} />
-        </Route>
-      </Routes>
-    </ResumeProvider>
+        </Routes>
+      </ResumeProvider>
+    </AuthProvider>
   );
 }

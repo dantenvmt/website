@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/admin/AdminPage.js
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-// --- Define Your Onboarding Steps ---
+// --- Define Updated Onboarding Steps ---
 const STEP_DEFINITIONS = {
-    1: 'Step 1: Gathering Documents',
-    2: 'Step 2: Change name later',
-    3: 'Step 3: Change name later',
+    1: 'Step 1: Contract Upload',       // Renamed
+    2: 'Step 2: Gathering Documents',   // Moved documents here
+    3: 'Step 3: Documents Under Review', // Renumbered
     4: 'Step 4: Change name later',
     5: 'Step 5: Change name later',
 };
 const MAX_STEP = Math.max(...Object.keys(STEP_DEFINITIONS).map(Number));
 
-// Reusable input component
+// --- Reusable Input Components (Keep AdminFormInput as is) ---
 const AdminFormInput = ({ label, name, type = 'text', value, onChange, required = false, placeholder = '' }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
@@ -29,32 +30,63 @@ const AdminFormInput = ({ label, name, type = 'text', value, onChange, required 
     </div>
 );
 
+// --- NEW Reusable File Input for Admin ---
+const AdminFileInput = ({ label, name, onChange, required = false, fileName, accept = ".pdf,.doc,.docx" }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-2">
+            {label}{required && <span className="text-red-500">*</span>}
+        </label>
+        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-neutral-600 border-dashed rounded-md">
+            <div className="space-y-1 text-center">
+                 {/* Simplified icon/text */}
+                <svg className="mx-auto h-10 w-10 text-neutral-500" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <label htmlFor={name} className="relative cursor-pointer bg-neutral-700 hover:bg-neutral-600 rounded-md font-medium text-white px-3 py-1 text-xs">
+                    <span>Choose file</span>
+                    <input id={name} name={name} type="file" className="sr-only" onChange={onChange} accept={accept} required={required} />
+                </label>
+                 {fileName ? (
+                    <p className="text-xs text-green-400 pt-1">{fileName}</p>
+                 ) : (
+                    <p className="text-xs text-neutral-500 pt-1">PDF, DOC, DOCX up to 10MB</p>
+                 )}
+            </div>
+        </div>
+    </div>
+);
+
 // --- Main Admin Page Component ---
 const AdminPage = () => {
-    // --- State for Create User Form ---
+    // --- State for Create User Form (Keep as is) ---
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
 
-    // --- State for Managing User Requirements ---
-    const [usersList, setUsersList] = useState([]); // Full list of users
-    const [selectedUserId, setSelectedUserId] = useState(''); // The user we are managing
+    // --- State for Managing User ---
+    const [usersList, setUsersList] = useState([]);
+    const [selectedUserId, setSelectedUserId] = useState('');
     const [selectedUserCurrentStep, setSelectedUserCurrentStep] = useState(null);
-    const [assignedRequirements, setAssignedRequirements] = useState([]); // List of requirements for the selected user
+    const [assignedRequirements, setAssignedRequirements] = useState([]);
     const [newRequirement, setNewRequirement] = useState({ document_name: '', document_notes: '' });
     const [assignmentMessage, setAssignmentMessage] = useState({ type: '', text: '' });
     const [stepMessage, setStepMessage] = useState({ type: '', text: '' });
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
     const [isUpdatingStep, setIsUpdatingStep] = useState(false);
+    const [rejectionNotes, setRejectionNotes] = useState({});
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(null);
 
-    const [rejectionNotes, setRejectionNotes] = useState({}); // { [user_document_id]: "notes text" }
-    const [isUpdatingStatus, setIsUpdatingStatus] = useState(null); // Track which doc status is being updated
-    // --- Fetch initial list of users ---
+    // --- NEW State for Contract Upload ---
+    const [contractFile, setContractFile] = useState(null);
+    const [contractFileName, setContractFileName] = useState('');
+    const [isUploadingContract, setIsUploadingContract] = useState(false);
+    const [contractMessage, setContractMessage] = useState({ type: '', text: '' });
+    const contractInputRef = useRef(null); // Ref to clear file input
+
+    // --- Fetch initial list of users (Keep as is) ---
     const fetchUsers = useCallback(async () => {
         setIsLoadingUsers(true);
-        setAssignmentMessage({ type: '', text: '' });
-        try {
+        // ... (rest of fetchUsers function is unchanged) ...
+         try {
             const response = await fetch('https://renaisons.com/api/get_users.php', {
                 credentials: 'include'
             });
@@ -76,15 +108,15 @@ const AdminPage = () => {
         fetchUsers();
     }, [fetchUsers]);
 
-    // --- Fetch assigned requirements when a user is selected ---
+    // --- Fetch assigned requirements (Keep as is, will run based on selectedUserId) ---
     const fetchUserRequirements = useCallback(async () => {
         if (!selectedUserId) {
             setAssignedRequirements([]);
             return;
         }
         setIsLoadingRequirements(true);
-        setAssignmentMessage({ type: '', text: '' });
-        try {
+        setAssignmentMessage({ type: '', text: '' }); // Clear messages when loading new requirements
+         try {
             const response = await fetch(`https://renaisons.com/api/get_user_requirements.php?user_id=${selectedUserId}`, {
                 credentials: 'include'
             });
@@ -105,16 +137,15 @@ const AdminPage = () => {
 
     useEffect(() => {
         fetchUserRequirements();
-    }, [fetchUserRequirements]); // This re-runs whenever fetchUserRequirements (which depends on selectedUserId) changes
+    }, [fetchUserRequirements]);
 
-    // --- Handlers for Create User ---
-    const handleNewUserChange = (e) => {
+    // --- Handlers for Create User (Keep as is) ---
+    const handleNewUserChange = (e) => {/* ... unchanged ... */
         const { name, value } = e.target;
         setNewUser(prev => ({ ...prev, [name]: value }));
     };
-
-    const handleCreateUserSubmit = async (e) => {
-        e.preventDefault();
+    const handleCreateUserSubmit = async (e) => {/* ... unchanged ... */
+         e.preventDefault();
         setIsCreatingUser(true);
         setCreateUserMessage({ type: '', text: '' });
         if (!newUser.email || !newUser.password) {
@@ -146,14 +177,13 @@ const AdminPage = () => {
         }
     };
 
-    // --- Handlers for Managing Requirements ---
-    const handleNewRequirementChange = (e) => {
+    // --- Handlers for Managing Requirements (Keep as is) ---
+    const handleNewRequirementChange = (e) => {/* ... unchanged ... */
         const { name, value } = e.target;
         setNewRequirement(prev => ({ ...prev, [name]: value }));
     };
-
-    const handleAddRequirement = async (e) => {
-        e.preventDefault();
+    const handleAddRequirement = async (e) => {/* ... unchanged ... */
+         e.preventDefault();
         if (!newRequirement.document_name.trim()) {
             setAssignmentMessage({ type: 'error', text: 'Document name cannot be empty.' });
             return;
@@ -179,8 +209,7 @@ const AdminPage = () => {
             setAssignmentMessage({ type: 'error', text: 'An error occurred while adding the requirement.' });
         }
     };
-
-    const handleRemoveRequirement = async (userDocumentId) => {
+    const handleRemoveRequirement = async (userDocumentId) => {/* ... unchanged ... */
         if (!window.confirm("Are you sure you want to remove this requirement for this user?")) {
             return;
         }
@@ -204,62 +233,8 @@ const AdminPage = () => {
             setAssignmentMessage({ type: 'error', text: 'An error occurred while removing the requirement.' });
         }
     };
-
-    // Handler when admin selects a user from the dropdown
-    const handleUserSelectionChange = (e) => {
-        const userId = e.target.value;
-        setSelectedUserId(userId);
-        setStepMessage({ type: '', text: '' });
-
-        if (userId) {
-            const user = usersList.find(u => u.user_id == userId);
-            if (user) {
-                setSelectedUserCurrentStep(user.onboarding_step);
-            }
-        } else {
-            setSelectedUserCurrentStep(null);
-        }
-    };
-
-    // Handler for the "Move to Next Step" button
-    const handleMoveToNextStep = async () => {
-        if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
-
-        const nextStep = selectedUserCurrentStep + 1;
-        setIsUpdatingStep(true);
-        setStepMessage({ type: '', text: '' });
-
-        try {
-            const response = await fetch('https://renaisons.com/api/update_user_step.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: selectedUserId, new_step: nextStep }),
-                credentials: 'include'
-            });
-            const result = await response.json();
-            if (response.ok && result.status === 'success') {
-                setStepMessage({ type: 'success', text: 'User moved to next step!' });
-                setSelectedUserCurrentStep(nextStep);
-                // Update the main usersList state locally
-                setUsersList(prevList => prevList.map(u =>
-                    u.user_id == selectedUserId ? { ...u, onboarding_step: nextStep } : u
-                ));
-            } else {
-                setStepMessage({ type: 'error', text: `Failed to update step: ${result.message}` });
-            }
-        } catch (error) {
-            console.error("Error updating step:", error);
-            setStepMessage({ type: 'error', text: 'An error occurred while updating the step.' });
-        } finally {
-            setIsUpdatingStep(false);
-        }
-    };
-    const handleRejectionNoteChange = (userDocumentId, value) => {
-        setRejectionNotes(prev => ({ ...prev, [userDocumentId]: value }));
-    };
-
-    const handleUpdateStatus = async (userDocumentId, newStatus) => {
-        const notes = newStatus === 'rejected' ? rejectionNotes[userDocumentId] || '' : null;
+    const handleUpdateStatus = async (userDocumentId, newStatus) => {/* ... unchanged ... */
+         const notes = newStatus === 'rejected' ? rejectionNotes[userDocumentId] || '' : null;
 
         if (newStatus === 'rejected' && !notes.trim()) {
             setAssignmentMessage({ type: 'error', text: 'Please enter rejection notes.' });
@@ -300,13 +275,146 @@ const AdminPage = () => {
             setIsUpdatingStatus(null); // Clear loading state
         }
     };
-    // --- Helper variables ---
+     const handleRejectionNoteChange = (userDocumentId, value) => {/* ... unchanged ... */
+        setRejectionNotes(prev => ({ ...prev, [userDocumentId]: value }));
+    };
+
+
+    // --- Handler for User Selection (Keep as is) ---
+    const handleUserSelectionChange = (e) => {/* ... unchanged ... */
+        const userId = e.target.value;
+        setSelectedUserId(userId);
+        setStepMessage({ type: '', text: '' });
+        setContractMessage({ type: '', text: '' }); // Clear contract messages too
+        setContractFile(null); // Clear selected contract file
+        setContractFileName('');
+
+        if (userId) {
+            const user = usersList.find(u => u.user_id == userId);
+            if (user) {
+                setSelectedUserCurrentStep(user.onboarding_step);
+            }
+        } else {
+            setSelectedUserCurrentStep(null);
+        }
+    };
+
+    // --- Handler for Step Update (Keep as is) ---
+    const handleMoveToNextStep = async () => {/* ... unchanged ... */
+         if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
+
+        const nextStep = selectedUserCurrentStep + 1;
+        setIsUpdatingStep(true);
+        setStepMessage({ type: '', text: '' });
+
+        try {
+            const response = await fetch('https://renaisons.com/api/update_user_step.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: selectedUserId, new_step: nextStep }),
+                credentials: 'include'
+            });
+            const result = await response.json();
+            if (response.ok && result.status === 'success') {
+                setStepMessage({ type: 'success', text: 'User moved to next step!' });
+                setSelectedUserCurrentStep(nextStep);
+                // Update the main usersList state locally
+                setUsersList(prevList => prevList.map(u =>
+                    u.user_id == selectedUserId ? { ...u, onboarding_step: nextStep } : u
+                ));
+            } else {
+                setStepMessage({ type: 'error', text: `Failed to update step: ${result.message}` });
+            }
+        } catch (error) {
+            console.error("Error updating step:", error);
+            setStepMessage({ type: 'error', text: 'An error occurred while updating the step.' });
+        } finally {
+            setIsUpdatingStep(false);
+        }
+    };
+
+    // --- NEW Handlers for Contract Upload ---
+    const handleContractFileChange = (e) => {
+        const file = e.target.files[0];
+         setContractMessage({ type: '', text: '' }); // Clear message on new selection
+        if (file) {
+            // Basic validation (can add more: type, size)
+             const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            const allowedExtensions = ['.pdf', '.doc', '.docx'];
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+             if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(fileExtension)) {
+                setContractMessage({ type: 'error', text: 'Invalid file type. Please upload PDF, DOC, or DOCX.' });
+                setContractFile(null);
+                setContractFileName('');
+                if (contractInputRef.current) contractInputRef.current.value = ''; // Clear file input visually
+                return;
+            }
+            setContractFile(file);
+            setContractFileName(file.name);
+        } else {
+            setContractFile(null);
+            setContractFileName('');
+        }
+    };
+
+    const handleContractUpload = async () => {
+        console.log('Uploading contract. UserID:', selectedUserId, 'File:', contractFile);
+        if (!selectedUserId) {
+             setContractMessage({ type: 'error', text: 'Error: No user is selected.' });
+             return;
+        }
+        if (!contractFile) {
+            setContractMessage({ type: 'error', text: 'Error: No contract file is selected.' });
+            return;
+        }
+        if (isUploadingContract) {
+            return; // Don't do anything if already uploading
+        }
+        if (!contractFile || !selectedUserId || isUploadingContract) {
+            setContractMessage({ type: 'error', text: 'Please select a contract file.' });
+            return;
+        }
+
+        setIsUploadingContract(true);
+        setContractMessage({ type: 'info', text: 'Uploading contract...' });
+
+        const formData = new FormData();
+        formData.append('userId', selectedUserId);
+        formData.append('contractFile', contractFile);
+
+        try {
+            const response = await fetch('https://renaisons.com/api/upload_admin_contract.php', { 
+                method: 'POST',
+                body: formData,
+                credentials: 'include' // Important for session check on backend
+            });
+            
+            const result = await response.json();
+
+            if (response.ok && result.status === 'success') {
+                setContractMessage({ type: 'success', text: 'Contract uploaded successfully!' });
+                setContractFile(null);
+                setContractFileName('');
+                 if (contractInputRef.current) contractInputRef.current.value = ''; // Clear file input
+                // Optionally: refresh user data or requirements if needed after contract upload
+                // fetchUserRequirements(); // Or fetchUsers() if contract status affects user list
+            } else {
+                setContractMessage({ type: 'error', text: `Upload failed: ${result.message || 'Server error'}` });
+            }
+        } catch (error) {
+            console.error("Error uploading contract:", error);
+            setContractMessage({ type: 'error', text: 'An error occurred during upload.' });
+        } finally {
+            setIsUploadingContract(false);
+        }
+    };
+
+    // --- Helper variables (Keep as is) ---
     const currentStepName = STEP_DEFINITIONS[selectedUserCurrentStep] || 'Unknown Step';
     const nextStepName = STEP_DEFINITIONS[selectedUserCurrentStep + 1];
     const atMaxStep = selectedUserCurrentStep >= MAX_STEP;
-
-    const getSelectedUserDisplay = () => {
-        if (!selectedUserId) return '';
+    const getSelectedUserDisplay = () => { /* ... unchanged ... */
+         if (!selectedUserId) return '';
         const user = usersList.find(u => u.user_id == selectedUserId);
         if (!user) return '';
         if (user.first_name && user.last_name) {
@@ -316,15 +424,18 @@ const AdminPage = () => {
     };
     const selectedUserDisplay = getSelectedUserDisplay();
 
+    // --- Render Logic ---
     return (
         <div className="p-8 md:p-12 text-white space-y-12">
             <h1 className="text-4xl font-bold">Admin Dashboard</h1>
 
-            {/* --- Section: Create User --- */}
+            {/* --- Section: Create User (Keep as is) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
-                <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
+                 {/* ... unchanged ... */}
+                 <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
                 <form onSubmit={handleCreateUserSubmit} className="space-y-4 max-w-lg">
-                    <AdminFormInput
+                    {/* ... form inputs ... */}
+                     <AdminFormInput
                         label="First Name"
                         name="firstName"
                         value={newUser.firstName}
@@ -354,12 +465,13 @@ const AdminPage = () => {
                 </form>
             </section>
 
-            {/* --- Section: Manage User Status & Requirements --- */}
+            {/* --- Section: Manage User --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
                 <h2 className="text-2xl font-semibold mb-4">Manage User Status & Requirements</h2>
 
-                {/* User Selection Dropdown */}
+                {/* User Selection Dropdown (Keep as is) */}
                 <div className="mb-6">
+                    {/* ... unchanged ... */}
                     <label htmlFor="userSelect" className="block text-sm font-medium text-neutral-300 mb-1">Select User to Manage</label>
                     <select
                         id="userSelect"
@@ -368,7 +480,7 @@ const AdminPage = () => {
                         disabled={isLoadingUsers}
                         className="w-full md:w-1/2 bg-neutral-700 border border-neutral-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-white"
                     >
-                        <option value="">-- Select a User --</option>
+                         <option value="">-- Select a User --</option>
                         {usersList.map(u => (
                             <option key={u.user_id} value={u.user_id}>
                                 {u.last_name || u.first_name ? `${u.last_name}, ${u.first_name} (${u.email})` : u.email} (Step {u.onboarding_step})
@@ -377,13 +489,13 @@ const AdminPage = () => {
                     </select>
                 </div>
 
-                {/* This entire section appears once a user is selected */}
+                {/* Section appears once a user is selected */}
                 {selectedUserId && (
                     <div className="space-y-8">
-
-                        {/* User Status / Step Management */}
+                        {/* User Status / Step Management (Keep as is) */}
                         <div className="border border-neutral-700 rounded-lg p-4">
-                            <h3 className="text-lg font-medium mb-3 text-neutral-300">
+                            {/* ... unchanged ... */}
+                             <h3 className="text-lg font-medium mb-3 text-neutral-300">
                                 User Status: <span className="font-semibold text-white">{selectedUserDisplay}</span>
                             </h3>
                             <p className="text-md mb-3 text-neutral-200">
@@ -405,129 +517,178 @@ const AdminPage = () => {
                             </button>
                         </div>
 
-                        {/* Assigned Requirements Table */}
-                        <div>
-                            <h3 className="text-lg font-medium mb-2 text-neutral-300">
-                                Assigned Requirements for {selectedUserDisplay}
-                            </h3>
-                            <div className="overflow-x-auto mb-6 border border-neutral-600 rounded-lg">
-                                <table className="min-w-full divide-y divide-neutral-600">
-                                    <thead className="bg-neutral-700">
-                                        <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Document Name</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Notes</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Status</th>
-                                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Review/Actions</th>
-                                            <th scope="col" className="relative px-6 py-3 w-12"><span className="sr-only">Actions</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-neutral-800 divide-y divide-neutral-700">
-                                        {isLoadingRequirements && (
-                                            <tr><td colSpan="4" className="text-center p-4 text-neutral-400">Loading requirements...</td></tr>
-                                        )}
-                                        {!isLoadingRequirements && assignedRequirements.length === 0 && (
-                                            <tr><td colSpan="4" className="text-center p-4 text-neutral-400">No requirements assigned to this user.</td></tr>
-                                        )}
-                                        {!isLoadingRequirements && assignedRequirements.map((req) => (
-                                            <tr key={req.user_document_id}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{req.document_name}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{req.document_notes}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${req.status === 'approved' ? 'bg-green-800 text-green-100' : req.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' : req.status === 'rejected' ? 'bg-red-800 text-red-100' : 'bg-gray-700 text-gray-100'}`}>
-                                                        {req.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
-                                                    {/* View Link (only if submitted or reviewed) */}
-                                                    {(req.status === 'submitted' || req.status === 'approved' || req.status === 'rejected') ? (
-                                                        <a
-                                                            href={`https://renaisons.com/api/download_user_document.php?doc_id=${req.user_document_id}`}
-                                                            target="_blank" // Open in new tab
-                                                            rel="noopener noreferrer" // Security best practice
-                                                            className="text-blue-400 hover:text-blue-300 hover:underline mr-3"
-                                                        >
-                                                            View File
-                                                        </a>
-                                                    ) : (
-                                                        <span className="text-neutral-500 mr-3">No File</span>
-                                                    )}
+                         {/* --- NEW: Contract Upload Section (Visible only in Step 1) --- */}
+                        {selectedUserCurrentStep === 1 && (
+                            <div className="border border-neutral-700 rounded-lg p-4">
+                                <h3 className="text-lg font-medium mb-3 text-neutral-300">
+                                    Step 1: Upload Contract for {selectedUserDisplay}
+                                </h3>
+                                {contractMessage.text && (
+                                    <p className={`text-sm mb-3 ${
+                                        contractMessage.type === 'error' ? 'text-red-400' :
+                                        contractMessage.type === 'success' ? 'text-green-400' :
+                                        'text-blue-400' // for info
+                                    }`}>
+                                        {contractMessage.text}
+                                    </p>
+                                )}
+                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                                    <div className="flex-grow w-full">
+                                        {/* Use the new AdminFileInput */}
+                                        <AdminFileInput
+                                            label="Contract Document"
+                                            name="contractFile"
+                                            onChange={handleContractFileChange}
+                                            fileName={contractFileName}
+                                            required // Make it required for step 1
+                                            ref={contractInputRef} // Pass ref here
+                                        />
+                                    </div>
+                                    <button
+                                        type="button" // Important: not type="submit"
+                                        onClick={handleContractUpload}
+                                        disabled={isUploadingContract || !contractFile}
+                                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50"
+                                    >
+                                        {isUploadingContract ? 'Uploading...' : 'Upload Contract'}
+                                    </button>
+                                </div>
+                                {/* Optional: Add display for already uploaded contract if backend provides it */}
+                            </div>
+                        )}
 
-                                                    {/* Approve/Reject Buttons (only if submitted) */}
-                                                    {req.status === 'submitted' && (
-                                                        <div className="flex flex-col sm:flex-row gap-2 items-start">
-                                                            <button
-                                                                onClick={() => handleUpdateStatus(req.user_document_id, 'approved')}
-                                                                disabled={isUpdatingStatus === req.user_document_id}
-                                                                className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50"
+                        {/* --- Requirements Section (Visible only in Step 2) --- */}
+                        {selectedUserCurrentStep === 2 && (
+                            <div>
+                                <h3 className="text-lg font-medium mb-2 text-neutral-300">
+                                    Step 2: Assigned Requirements for {selectedUserDisplay}
+                                </h3>
+                                {/* Display general assignment messages here */}
+                                {assignmentMessage.text && (
+                                    <p className={`text-sm mb-4 p-3 rounded ${assignmentMessage.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' : 'bg-green-900/50 border border-green-700 text-green-300'}`}>
+                                        {assignmentMessage.text}
+                                    </p>
+                                )}
+                                {/* Assigned Requirements Table */}
+                                <div className="overflow-x-auto mb-6 border border-neutral-600 rounded-lg">
+                                    <table className="min-w-full divide-y divide-neutral-600">
+                                       {/* ... table head unchanged ... */}
+                                        <thead className="bg-neutral-700">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Document Name</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Notes</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Review/Actions</th>
+                                                <th scope="col" className="relative px-6 py-3 w-12"><span className="sr-only">Actions</span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-neutral-800 divide-y divide-neutral-700">
+                                            {isLoadingRequirements && (
+                                                <tr><td colSpan="5" className="text-center p-4 text-neutral-400">Loading requirements...</td></tr>
+                                            )}
+                                            {!isLoadingRequirements && assignedRequirements.length === 0 && (
+                                                <tr><td colSpan="5" className="text-center p-4 text-neutral-400">No requirements assigned for this step.</td></tr>
+                                            )}
+                                            {!isLoadingRequirements && assignedRequirements.map((req) => (
+                                                <tr key={req.user_document_id}>
+                                                     {/* ... table cells (td) unchanged ... */}
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{req.document_name}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{req.document_notes}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${req.status === 'approved' ? 'bg-green-800 text-green-100' : req.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' : req.status === 'rejected' ? 'bg-red-800 text-red-100' : 'bg-gray-700 text-gray-100'}`}>
+                                                            {req.status}
+                                                        </span>
+                                                    </td>
+                                                     <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
+                                                        {/* ... review/actions cell content unchanged ... */}
+                                                         {/* View Link (only if submitted or reviewed) */}
+                                                        {(req.status === 'submitted' || req.status === 'approved' || req.status === 'rejected') ? (
+                                                            <a
+                                                                href={`https://renaisons.com/api/download_user_document.php?doc_id=${req.user_document_id}`}
+                                                                target="_blank" // Open in new tab
+                                                                rel="noopener noreferrer" // Security best practice
+                                                                className="text-blue-400 hover:text-blue-300 hover:underline mr-3"
                                                             >
-                                                                {isUpdatingStatus === req.user_document_id ? '...' : 'Approve'}
-                                                            </button>
-                                                            <div className="flex flex-col items-start w-full">
+                                                                View File
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-neutral-500 mr-3">No File</span>
+                                                        )}
+
+                                                        {/* Approve/Reject Buttons (only if submitted) */}
+                                                        {req.status === 'submitted' && (
+                                                            <div className="flex flex-col sm:flex-row gap-2 items-start">
                                                                 <button
-                                                                    onClick={() => handleUpdateStatus(req.user_document_id, 'rejected')}
+                                                                    onClick={() => handleUpdateStatus(req.user_document_id, 'approved')}
                                                                     disabled={isUpdatingStatus === req.user_document_id}
-                                                                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50 mb-1"
+                                                                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50"
                                                                 >
-                                                                    {isUpdatingStatus === req.user_document_id ? '...' : 'Reject'}
+                                                                    {isUpdatingStatus === req.user_document_id ? '...' : 'Approve'}
                                                                 </button>
-                                                                <textarea
-                                                                    value={rejectionNotes[req.user_document_id] || ''}
-                                                                    onChange={(e) => handleRejectionNoteChange(req.user_document_id, e.target.value)}
-                                                                    placeholder="Rejection notes (optional)"
-                                                                    rows="2"
-                                                                    className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white"
-                                                                />
+                                                                <div className="flex flex-col items-start w-full">
+                                                                    <button
+                                                                        onClick={() => handleUpdateStatus(req.user_document_id, 'rejected')}
+                                                                        disabled={isUpdatingStatus === req.user_document_id}
+                                                                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50 mb-1"
+                                                                    >
+                                                                        {isUpdatingStatus === req.user_document_id ? '...' : 'Reject'}
+                                                                    </button>
+                                                                    <textarea
+                                                                        value={rejectionNotes[req.user_document_id] || ''}
+                                                                        onChange={(e) => handleRejectionNoteChange(req.user_document_id, e.target.value)}
+                                                                        placeholder="Rejection notes (required)"
+                                                                        rows="2"
+                                                                        className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white"
+                                                                    />
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}{req.status === 'rejected' && req.admin_notes && (
+                                                        )}
+                                                         {req.status === 'rejected' && req.admin_notes && (
                                                         <p className="text-xs text-red-300 mt-1">Notes: {req.admin_notes}</p>
                                                     )}
                                                     {/* Placeholder if Pending/Approved */}
                                                     {(req.status === 'pending' || req.status === 'approved') && (
                                                         <span className="text-neutral-500 text-xs">No actions needed</span>
                                                     )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                                    <button
-                                                        onClick={() => handleRemoveRequirement(req.user_document_id)}
-                                                        className="text-red-400 hover:text-red-600"
-                                                        title="Remove Requirement"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Add New Requirement Form */}
-                        <form onSubmit={handleAddRequirement} className="border-t border-neutral-700 pt-6">
-                            <h4 className="text-md font-medium mb-2 text-neutral-300">
-                                Add New Requirement for {selectedUserDisplay}
-                            </h4>
-                            {assignmentMessage.text && (
-                                <p className={`text-sm mb-2 ${assignmentMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
-                                    {assignmentMessage.text}
-                                </p>
-                            )}
-                            <div className="flex flex-col md:flex-row gap-4 items-end">
-                                <div className="flex-grow w-full">
-                                    <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., Signed NDA" />
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                        <button
+                                                            onClick={() => handleRemoveRequirement(req.user_document_id)}
+                                                            className="text-red-400 hover:text-red-600"
+                                                            title="Remove Requirement"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div className="flex-grow w-full">
-                                    <AdminFormInput label="Notes (Optional)" name="document_notes" value={newRequirement.document_notes} onChange={handleNewRequirementChange} placeholder="e.g., Must be returned by EOD Friday" />
-                                </div>
-                                <button
-                                    type="submit"
-                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto"
-                                >
-                                    Add Requirement
-                                </button>
+                                {/* Add New Requirement Form */}
+                                <form onSubmit={handleAddRequirement} className="border-t border-neutral-700 pt-6">
+                                    <h4 className="text-md font-medium mb-2 text-neutral-300">
+                                        Add New Requirement for {selectedUserDisplay}
+                                    </h4>
+                                    {/* Message display moved up */}
+                                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                                        <div className="flex-grow w-full">
+                                            <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., Signed NDA" required/>
+                                        </div>
+                                        <div className="flex-grow w-full">
+                                            <AdminFormInput label="Notes (Optional)" name="document_notes" value={newRequirement.document_notes} onChange={handleNewRequirementChange} placeholder="e.g., Must be returned by EOD Friday" />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto"
+                                        >
+                                            Add Requirement
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
-                        </form>
+                        )}
+                        {/* Optionally add content for steps 3, 4, 5 here */}
 
                     </div>
                 )}

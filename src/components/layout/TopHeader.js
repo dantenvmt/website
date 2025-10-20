@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext'; // Verify path
 import HamburgerIcon from './HamburgerIcon';
 import LoginModal from '../auth/LoginModal'; // Verify path
@@ -27,7 +27,6 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
 
     };
 
-    // Function to handle the logout process
     const handleLogout = () => {
         logout(); // Call the logout function from AuthContext
         setToast({ show: true, message: 'Logged out successfully.' });
@@ -49,6 +48,13 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                     <span className="text-sm text-neutral-400 hidden md:inline" title={user.role}>
                         {user.email}
                     </span>
+                    <Link
+                        to="/settings/change-password"
+                        className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"
+                        title="Change Password"
+                    >
+                         Settings
+                    </Link>
                     <button
                         onClick={handleLogout}
                         className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"

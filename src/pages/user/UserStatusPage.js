@@ -1,21 +1,23 @@
-
+// src/pages/user/UserStatusPage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
+// --- Define Updated Onboarding Steps ---
 const STEP_DEFINITIONS = {
-    1: 'Step 1: Gathering Documents',
-    2: 'Step 2: Documents Under Review',
-    3: 'Step 3: Change this later',
-    4: 'Step 4: Change this later',
-    5: 'Step 5: Change this later',
+    1: 'Step 1: Contract Upload',       // Updated
+    2: 'Step 2: Gathering Documents',   // Updated
+    3: 'Step 3: Documents Under Review', // Updated
+    4: 'Step 4: Change name later',
+    5: 'Step 5: Change name later',
     // Add more steps as needed
 };
 const TOTAL_STEPS = Object.keys(STEP_DEFINITIONS).length; // Calculate total steps
 
 // --- Main User Status Page Component ---
 const UserStatusPage = () => {
-    const { user, loading: authLoading } = useAuth(); // Get logged-in user info
-    const [statusInfo, setStatusInfo] = useState({ step: 1, requirements: [] });
+    const { user, loading: authLoading } = useAuth();
+    // Include contract status/info if backend provides it
+    const [statusInfo, setStatusInfo] = useState({ step: 1, requirements: [], contractPath: null, contractStatus: 'pending' });
     const [isLoading, setIsLoading] = useState(true);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [fileInputs, setFileInputs] = useState({});
@@ -30,7 +32,6 @@ const UserStatusPage = () => {
         setIsLoading(true);
         setMessage({ type: '', text: '' });
         try {
-            // Fetch from your backend API
             const response = await fetch(`https://renaisons.com/api/get_my_status.php`, {
                 credentials: 'include'
             });
@@ -38,7 +39,10 @@ const UserStatusPage = () => {
             if (response.ok && result.status === 'success') {
                 setStatusInfo({
                     step: result.onboarding_step || 1,
-                    requirements: result.requirements || []
+                    requirements: result.requirements || [],
+                    // --- NEW: Expect contract info from backend ---
+                    contractPath: result.contract?.file_path || null,
+                    contractStatus: result.contract?.status || 'pending' // e.g., 'pending', 'uploaded', 'approved'
                 });
             } else {
                 setMessage({ type: 'error', text: result.message || 'Failed to load status.' });
@@ -49,22 +53,19 @@ const UserStatusPage = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [user]);
+    }, [user, authLoading]); // Added authLoading dependency
 
-    // Fetch data when component mounts or user/authLoading changes
     useEffect(() => {
-
         if (!authLoading && user) {
             fetchUserStatus();
         } else if (!authLoading && !user) {
-            // If auth check is done but there's no user (logged out), ensure loading stops.
             setIsLoading(false);
-            setStatusInfo({ step: 1, requirements: [] }); // Reset status
+            setStatusInfo({ step: 1, requirements: [], contractPath: null, contractStatus: 'pending' });
         }
-    }, [authLoading, user, fetchUserStatus]); // <-- DEPEND ON USER HERE
+    }, [authLoading, user, fetchUserStatus]);
 
-    // --- File Input Handling ---
-    const handleFileChange = (requirementId, event) => {
+    // --- File Input Handling (Keep as is) ---
+    const handleFileChange = (requirementId, event) => { /* ... unchanged ... */
         const file = event.target.files[0];
         if (file) {
             const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -87,8 +88,8 @@ const UserStatusPage = () => {
         }
     };
 
-    // --- File Upload Submission ---
-    const handleFileUpload = async (userDocumentId) => {
+    // --- File Upload Submission (Keep as is) ---
+    const handleFileUpload = async (userDocumentId) => { /* ... unchanged ... */
         const file = fileInputs[userDocumentId];
         if (!file) {
             setMessage({ type: 'error', text: 'Please select a file first.' });
@@ -124,8 +125,16 @@ const UserStatusPage = () => {
         }
     };
 
-    // --- Helper function for status badge color ---
-    const getStatusColor = (status) => { /* (same as before) */ };
+    // --- Helper function for status badge color (Keep as is) ---
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'approved': return 'bg-green-800 text-green-100';
+            case 'submitted': return 'bg-yellow-800 text-yellow-100';
+            case 'rejected': return 'bg-red-800 text-red-100';
+            case 'pending':
+            default: return 'bg-gray-700 text-gray-100';
+        }
+    };
 
     // --- Render Logic ---
     if (authLoading || isLoading) {
@@ -135,9 +144,9 @@ const UserStatusPage = () => {
         return <div className="p-8 md:p-12 text-center text-neutral-400">Please log in to view your status.</div>;
     }
 
-    // --- Step Indicator Component ---
-    const StepIndicator = ({ currentStep }) => {
-        return (
+    // --- Step Indicator Component (Keep as is) ---
+    const StepIndicator = ({ currentStep }) => { /* ... unchanged ... */
+         return (
             <nav className="flex items-center justify-center space-x-2 md:space-x-4 mb-10 overflow-x-auto pb-2" aria-label="Progress">
                 {Object.entries(STEP_DEFINITIONS).map(([stepNumStr, stepName]) => {
                     const stepNum = parseInt(stepNumStr, 10);
@@ -176,78 +185,127 @@ const UserStatusPage = () => {
 
     return (
         <div className="p-8 md:p-12 text-white">
-            <h1 className="text-4xl font-bold mb-6 text-center">My Visa Status</h1>
+            <h1 className="text-4xl font-bold mb-6 text-center">My Onboarding Status</h1>
 
-            {/* Render the Step Indicator */}
             <StepIndicator currentStep={statusInfo.step} />
 
-            {/* Requirements Section */}
-            <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700 max-w-4xl mx-auto">
-                <h2 className="text-2xl font-semibold mb-4">Required Documents</h2>
-
-                {/* Display overall messages */}
-                {message.text && (
-                    <p className={`text-sm mb-4 p-3 rounded ${message.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' :
+            {/* --- Display overall messages (Keep as is) --- */}
+            {message.text && (
+                 <p className={`text-sm mb-4 p-3 rounded max-w-4xl mx-auto ${message.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' :
                         message.type === 'success' ? 'bg-green-900/50 border border-green-700 text-green-300' :
                             'bg-blue-900/50 border border-blue-700 text-blue-300'
                         }`}>
-                        {message.text}
-                    </p>
-                )}
+                    {message.text}
+                </p>
+            )}
 
-                {statusInfo.requirements.length === 0 ? (
-                    <p className="text-neutral-400">No documents are currently required for your current step.</p>
-                ) : (
-                    <div className="space-y-6">
-                        {statusInfo.requirements.map(req => (
-                            <div key={req.user_document_id} className="p-4 border border-neutral-700 rounded-md bg-neutral-900/50">
-                                {/* Requirement Info */}
-                                <div className="flex flex-col md:flex-row justify-between md:items-center mb-2 gap-2">
-                                    <h3 className="text-lg font-medium text-white">{req.document_name}</h3>
-                                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(req.status)} flex-shrink-0`}>
-                                        {req.status}
-                                    </span>
-                                </div>
-                                {req.document_notes && (
-                                    <p className="text-sm text-neutral-400 mb-3">Notes: {req.document_notes}</p>
-                                )}
-                                {req.status === 'rejected' && req.admin_notes && (
-                                    <p className="text-sm text-red-300 bg-red-900/30 p-2 rounded border border-red-700 mb-3">
-                                        Admin Feedback: {req.admin_notes}
-                                    </p>
-                                )}
+            {/* --- Conditional Content Based on Step --- */}
+            <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700 max-w-4xl mx-auto">
 
-                                {/* Upload Section (only if pending or rejected) */}
-                                {(req.status === 'pending' || req.status === 'rejected') && (
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-3 border-t border-neutral-700 pt-3">
-                                        <input
-                                            type="file"
-                                            id={`file-${req.user_document_id}`}
-                                            ref={el => fileInputRefs.current[req.user_document_id] = el}
-                                            onChange={(e) => handleFileChange(req.user_document_id, e)}
-                                            accept=".pdf,.doc,.docx"
-                                            className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
-                                        />
-                                        <button
-                                            onClick={() => handleFileUpload(req.user_document_id)}
-                                            disabled={!fileInputs[req.user_document_id]}
-                                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                                        >
-                                            Submit Document
-                                        </button>
-                                    </div>
-                                )}
-                                {/* Status Messages */}
-                                {req.status === 'submitted' && (
-                                    <p className="text-sm text-yellow-300 mt-2 border-t border-neutral-700 pt-3">Document submitted, pending review.</p>
-                                )}
-                                {req.status === 'approved' && (
-                                    <p className="text-sm text-green-300 mt-2 border-t border-neutral-700 pt-3">Document approved.</p>
-                                )}
+                {/* --- Step 1: Contract --- */}
+                {statusInfo.step === 1 && (
+                    <>
+                        <h2 className="text-2xl font-semibold mb-4">Contract Agreement</h2>
+                        {statusInfo.contractPath ? (
+                            <div className="p-4 border border-neutral-700 rounded-md bg-neutral-900/50">
+                                <p className="text-neutral-300 mb-3">Your contract has been uploaded by the administrator.</p>
+                                <a
+                                    // Assuming backend provides a way to download admin uploads,
+                                    // similar to user uploads but maybe a different script or parameter.
+                                    // Adjust the href as needed.
+                                    href={`https://renaisons.com/api/download_contract.php?user_id=${user.userId}`} // EXAMPLE URL
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                                >
+                                    Download Contract
+                                </a>
+                                {/* You could also show contractStatus here if backend provides it */}
+                                {/* <p className="text-sm mt-2">Status: <span className={getStatusColor(statusInfo.contractStatus)}>{statusInfo.contractStatus}</span></p> */}
                             </div>
-                        ))}
-                    </div>
+                        ) : (
+                            <p className="text-neutral-400">Please wait for the administrator to upload your contract.</p>
+                        )}
+                    </>
                 )}
+
+                {/* --- Step 2: Gathering Documents --- */}
+                {statusInfo.step === 2 && (
+                     <>
+                        <h2 className="text-2xl font-semibold mb-4">Required Documents</h2>
+                        {statusInfo.requirements.length === 0 ? (
+                            <p className="text-neutral-400">No documents are currently required for this step.</p>
+                        ) : (
+                            <div className="space-y-6">
+                                {statusInfo.requirements.map(req => (
+                                    <div key={req.user_document_id} className="p-4 border border-neutral-700 rounded-md bg-neutral-900/50">
+                                        {/* Requirement Info */}
+                                        <div className="flex flex-col md:flex-row justify-between md:items-center mb-2 gap-2">
+                                            <h3 className="text-lg font-medium text-white">{req.document_name}</h3>
+                                            <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(req.status)} flex-shrink-0`}>
+                                                {req.status}
+                                            </span>
+                                        </div>
+                                        {req.document_notes && (
+                                            <p className="text-sm text-neutral-400 mb-3">Notes: {req.document_notes}</p>
+                                        )}
+                                        {req.status === 'rejected' && req.admin_notes && (
+                                            <p className="text-sm text-red-300 bg-red-900/30 p-2 rounded border border-red-700 mb-3">
+                                                Admin Feedback: {req.admin_notes}
+                                            </p>
+                                        )}
+
+                                        {/* Upload Section (only if pending or rejected) */}
+                                        {(req.status === 'pending' || req.status === 'rejected') && (
+                                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-3 border-t border-neutral-700 pt-3">
+                                                <input
+                                                    type="file"
+                                                    id={`file-${req.user_document_id}`}
+                                                    ref={el => fileInputRefs.current[req.user_document_id] = el}
+                                                    onChange={(e) => handleFileChange(req.user_document_id, e)}
+                                                    accept=".pdf,.doc,.docx" // Use constant ALLOWED_FILE_TYPES if available via context/props
+                                                    className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                                                />
+                                                <button
+                                                    onClick={() => handleFileUpload(req.user_document_id)}
+                                                    disabled={!fileInputs[req.user_document_id]}
+                                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                                >
+                                                    Submit Document
+                                                </button>
+                                            </div>
+                                        )}
+                                        {/* Status Messages */}
+                                        {req.status === 'submitted' && (
+                                            <p className="text-sm text-yellow-300 mt-2 border-t border-neutral-700 pt-3">Document submitted, pending review.</p>
+                                        )}
+                                        {req.status === 'approved' && (
+                                            <p className="text-sm text-green-300 mt-2 border-t border-neutral-700 pt-3">Document approved.</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                 {/* --- Step 3: Documents Under Review --- */}
+                {statusInfo.step === 3 && (
+                    <>
+                        <h2 className="text-2xl font-semibold mb-4">Documents Under Review</h2>
+                        <p className="text-neutral-400">Your submitted documents are currently being reviewed by the administration. You will be notified once the review is complete, or if any further action is required.</p>
+                         {/* Optionally, display the list of submitted/approved documents here without upload buttons */}
+                    </>
+                )}
+
+                 {/* --- Steps 4+ --- */}
+                 {statusInfo.step > 3 && (
+                     <>
+                        <h2 className="text-2xl font-semibold mb-4">{STEP_DEFINITIONS[statusInfo.step]}</h2>
+                        <p className="text-neutral-400">Details for this step will appear here.</p>
+                     </>
+                 )}
+
             </section>
         </div>
     );

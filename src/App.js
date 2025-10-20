@@ -33,6 +33,7 @@ import AdminRoute from './components/auth/AdminRoute';
 import AdminPage from './pages/admin/AdminPage';
 import NotFoundPage from './pages/NotFoundPage';
 import UserStatusPage from './pages/user/UserStatusPage';
+import ChangePasswordPage from './pages/user/ChangePasswordPage';
 export default function App() {
   return (
     <AuthProvider>
@@ -45,6 +46,14 @@ export default function App() {
                 <AdminRoute> {/* <-- USE AdminRoute */}
                   <AdminPage />
                 </AdminRoute>
+              }
+            />
+            <Route
+              path="settings/change-password"
+              element={
+                <ProtectedRoute> {/* Use ProtectedRoute */}
+                  <ChangePasswordPage />
+                </ProtectedRoute>
               }
             />
 

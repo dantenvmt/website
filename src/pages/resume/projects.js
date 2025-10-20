@@ -1,12 +1,11 @@
 import React, { useCallback } from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
 import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
 import { useResume } from '../../context/ResumeContext';
-
+import { useParams } from 'react-router-dom';
 const ProjectItem = ({ project, index, onUpdate, onDelete, onSave }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -58,9 +57,9 @@ const ProjectItem = ({ project, index, onUpdate, onDelete, onSave }) => {
         </div>
     );
 };
-
 const Projects = () => {
     const { projects, setProjects, addProject } = useResume();
+    const { resumeId } = useParams();
 
     const updateProject = useCallback((id, updatedData) => {
         setProjects(currentProjs =>
@@ -69,21 +68,49 @@ const Projects = () => {
     }, [setProjects]);
 
     const deleteProject = (id) => {
-        if (projects.length > 1) {
+        const projectToDelete = projects.find(proj => proj.id === id);
+        if (projects.length > 1 || projectToDelete.name) {
             setProjects(projects.filter(proj => proj.id !== id));
         } else {
             alert("You must have at least one project entry.");
         }
     };
 
-    const saveProject = (id) => {
+    const saveProject = async (id) => {
+        if (!resumeId) {
+            alert("Error: Cannot save project without a resume ID.");
+            return;
+        }
+
         const projToSave = projects.find(proj => proj.id === id);
-        console.log("Saving Project:", projToSave);
-        alert(`${projToSave.name || 'Project'} saved!`);
+        if (!projToSave.name) {
+            alert("Cannot save a project without a name.");
+            return;
+        }
+
+        try {
+            const response = await fetch('https://renaisons.com/api/save_project.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...projToSave, resume_id: resumeId }),
+            });
+
+            const result = await response.json();
+            if (result.status === 'success') {
+                if (result.project_id) {
+                    updateProject(id, { ...projToSave, id: result.project_id });
+                }
+                alert(`${projToSave.name || 'Project'} saved!`);
+            } else {
+                alert('Error saving project: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Failed to save project:', error);
+        }
     };
 
     return (
-        <EditorLayout>
+        <>
             {projects.map((proj, index) => (
                 <ProjectItem
                     key={proj.id}
@@ -91,14 +118,13 @@ const Projects = () => {
                     index={index}
                     onUpdate={updateProject}
                     onDelete={deleteProject}
-                    onSave={saveProject}
+                    onSave={() => saveProject(proj.id)}
                 />
             ))}
             <AddItemButton onClick={addProject}>
                 ADD ANOTHER PROJECT
             </AddItemButton>
-        </EditorLayout>
+        </>
     );
 };
-
 export default Projects;

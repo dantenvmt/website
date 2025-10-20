@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom'; // Import useParams
 import { useResume } from '../../context/ResumeContext';
 import jsPDF from 'jspdf';
 import AIKeywordAnalysis from '../../components/resume/AIKeywordAnalysis';
@@ -41,15 +41,66 @@ const DraggableResumeSection = ({ title, children, onDragStart, onDrop, onDragEn
 
 // --- Main Page Component ---
 const FinalResumePage = () => {
-    const { contact, contactToggles, summary, experiences, educations, certifications, awards, skills, projects } = useResume();
+    const {
+        contact, setContact,
+        contactToggles,
+        summary, setSummary,
+        experiences, setExperiences,
+        educations, setEducations,
+        certifications, setCertifications,
+        awards, setAwards,
+        skills, setSkills,
+        projects, setProjects
+    } = useResume();
+
     const navigate = useNavigate();
+    const { resumeId } = useParams(); // Get resumeId from the URL
     const hiddenPreviewRef = useRef();
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
     const [orderedSections, setOrderedSections] = useState([]);
     const [isDragging, setIsDragging] = useState(false);
     const [paginatedContent, setPaginatedContent] = useState([]);
-    const PAGE_HEIGHT_PX = 1440; // Custom preview height (e.g., 15in * 96dpi)
+    const PAGE_HEIGHT_PX = 1300;
+
+    // --- ADD THIS ENTIRE useEffect BLOCK TO FETCH DATA ---
+    useEffect(() => {
+        const fetchResumeData = async () => {
+            try {
+                const response = await fetch(`/api/get_resume_details.php?resume_id=${resumeId}`);
+                const result = await response.json();
+
+                if (result.status === 'success' && result.data) {
+                    const { data } = result;
+
+                    const contactInfo = data.contact_info || {};
+                    if (contactInfo.full_name) {
+                        contactInfo.fullName = contactInfo.full_name;
+                        delete contactInfo.full_name;
+                    }
+
+                    setContact(contactInfo);
+                    setSummary(data.summary?.summaries_description || '');
+                    setSkills(data.skills?.skills_description || '');
+                    setExperiences(data.experiences || []);
+                    setEducations(data.educations || []);
+                    setAwards(data.awards || []);
+                    setCertifications(data.certifications || []);
+                    setProjects(data.projects || []);
+                } else {
+                    console.error("Failed to fetch resume details:", result.message);
+                    navigate('/resume');
+                }
+            } catch (error) {
+                console.error("Error fetching resume data:", error);
+            }
+        };
+
+        if (resumeId) {
+            fetchResumeData();
+        }
+    }, [resumeId, navigate, setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects]);
+    // --- END OF NEW BLOCK ---
 
     useEffect(() => {
         const allSections = [
@@ -83,15 +134,12 @@ const FinalResumePage = () => {
             sectionNodes.forEach((node, index) => {
                 const section = orderedSections[index];
                 if (!section) return;
-
                 const sectionHeight = node.offsetHeight;
-
                 if (currentHeight + sectionHeight > USABLE_PAGE_HEIGHT_PX && currentPageSections.length > 0) {
                     pages.push(currentPageSections);
                     currentPageSections = [];
                     currentHeight = 0;
                 }
-
                 currentPageSections.push(section);
                 currentHeight += sectionHeight;
             });
@@ -99,13 +147,11 @@ const FinalResumePage = () => {
             if (currentPageSections.length > 0) {
                 pages.push(currentPageSections);
             }
-
             setPaginatedContent(pages);
         } else {
             setPaginatedContent([]);
         }
-    }, [orderedSections, contact, summary, experiences, educations, projects, certifications, awards, skills]);
-
+    }, [orderedSections]); // Simplified dependencies for stability
 
     const formatPhoneNumber = (phoneNum) => {
         const cleaned = ('' + phoneNum).replace(/\D/g, '');
@@ -168,7 +214,6 @@ const FinalResumePage = () => {
         const LINE_HEIGHT_BODY = FONT_SIZE_BODY * 0.35 * LINE_SPACING;
         const LINE_HEIGHT_HEADER = FONT_SIZE_HEADER * 0.35 * LINE_SPACING;
 
-
         const checkPageBreak = (neededHeight) => {
             if (y + neededHeight > pageHeight - margin) {
                 doc.addPage();
@@ -180,7 +225,7 @@ const FinalResumePage = () => {
         doc.setFont('times', 'bold');
         doc.setFontSize(FONT_SIZE_NAME);
         doc.text(contact.fullName || "Your Name", pageWidth / 2, y, { align: 'center' });
-        y += (doc.getTextDimensions(contact.fullName).h * 0.5) + 2;
+        y += (doc.getTextDimensions(contact.fullName || ' ').h * 0.5) + 2;
 
         doc.setFont('times', 'normal');
         doc.setFontSize(10);
@@ -232,7 +277,6 @@ const FinalResumePage = () => {
                         y += LINE_HEIGHT_HEADER + 1;
                         doc.setFontSize(FONT_SIZE_BODY);
 
-
                         const bulletPoints = exp.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bulletPoints.forEach(bullet => {
                             const bulletLines = doc.splitTextToSize(bullet, contentWidth - 5);
@@ -277,7 +321,6 @@ const FinalResumePage = () => {
                             y += LINE_HEIGHT_HEADER;
                         }
                         doc.setFontSize(FONT_SIZE_BODY);
-
 
                         const bulletPoints = edu.bullets.split('\n').map(line => line.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bulletPoints.forEach(bullet => {
@@ -336,11 +379,11 @@ const FinalResumePage = () => {
             y += SECTION_SPACING;
         });
 
-        doc.save(`${contact.fullName.replace(/\s/g, '_') || 'Resume'}.pdf`);
+
+        doc.save(`${(contact.fullName || 'Resume').replace(/\s/g, '_')}.pdf`);
     };
 
     const renderSectionContent = (section) => {
-        // This function remains unchanged
         switch (section.id) {
             case 'summary':
                 return <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{summary}</p>;
@@ -356,7 +399,7 @@ const FinalResumePage = () => {
                             <p className="text-xs font-normal text-gray-700">{exp.location}</p>
                         </div>
                         <ul className="mt-2 text-sm text-gray-800 list-disc pl-5 space-y-1 leading-relaxed">
-                            {exp.bullets.split('\n').map((line, i) => {
+                            {exp.bullets && exp.bullets.split('\n').map((line, i) => {
                                 const cleanedLine = line.trim().replace(/^•\s*/, '');
                                 return cleanedLine && <li key={i}>{cleanedLine}</li>;
                             })}
@@ -463,13 +506,12 @@ const FinalResumePage = () => {
         <div className="text-white min-h-screen p-4 sm:p-8">
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-                    <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-400 hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                    <button onClick={() => navigate(`/resume/${resumeId}/contact`)} className="flex items-center gap-2 text-gray-400 hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                         Back to Editor
                     </button>
                     <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">DOWNLOAD PDF</button>
                 </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 bg-gray-200 p-4 sm:p-8 rounded-lg flex flex-col items-center overflow-x-auto">
                         {paginatedContent.map((pageSections, pageIndex) => (
@@ -501,16 +543,12 @@ const FinalResumePage = () => {
                             </ResumePage>
                         ))}
                     </div>
-
                     <div className="lg:col-span-1 space-y-8">
                         <AIKeywordAnalysis />
                     </div>
                 </div>
-
-                {/* Hidden div for measuring content height */}
                 <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, width: '8.5in' }}>
                     <div className="bg-white text-black font-serif" style={{ width: '8.5in', minHeight: '11in', padding: '1in' }}>
-
                         <header className="text-center mb-6">
                             <h1 className="text-2xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
                             <div className="text-xs text-gray-700 mt-2">
@@ -526,7 +564,6 @@ const FinalResumePage = () => {
                             ))}
                         </main>
                     </div>
-
                 </div>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
+import { useParams } from 'react-router-dom';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
@@ -81,10 +81,9 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave, onAiWri
     );
 };
 
-// Main Experience Page Component
 const Experience = () => {
-    // Get state and functions from the context
     const { experiences, setExperiences, addExperience } = useResume();
+    const { resumeId } = useParams(); // Get resumeId from the URL
 
     const updateExperience = useCallback((id, updatedData) => {
         setExperiences(currentExperiences =>
@@ -94,16 +93,49 @@ const Experience = () => {
 
     const deleteExperience = (id) => {
         if (experiences.length > 1) {
+            // Here you would also add a fetch call to a `delete_experience.php` script
             setExperiences(experiences.filter(exp => exp.id !== id));
         } else {
             alert("You must have at least one experience entry.");
         }
     };
 
-    const saveExperience = (id) => {
+    const saveExperience = async (id) => {
+        if (!resumeId) {
+            alert("Error: Cannot save experience without a resume ID.");
+            return;
+        }
+
         const experienceToSave = experiences.find(exp => exp.id === id);
-        console.log("Saving experience:", experienceToSave);
-        alert(`${experienceToSave.role || 'Experience'} at ${experienceToSave.company || 'company'} saved!`);
+
+        try {
+            const response = await fetch('https://renaisons.com/api/save_experience.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...experienceToSave,
+                    resume_id: resumeId // Add the resume_id
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // If it was a new experience, the server sends back the new database ID
+                if (result.experience_id) {
+                    // Update the temporary frontend ID with the real one from the database
+                    updateExperience(id, { ...experienceToSave, id: result.experience_id });
+                }
+                alert(`${experienceToSave.role || 'Experience'} saved!`);
+            } else {
+                alert('Error saving experience: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Failed to save experience:', error);
+            alert('An error occurred. Please try again.');
+        }
     };
 
     const handleAiWrite = (id) => {
@@ -131,7 +163,7 @@ const Experience = () => {
     };
 
     return (
-        <EditorLayout>
+        <>
             {experiences.map((exp, index) => (
                 <ExperienceItem
                     key={exp.id}
@@ -146,7 +178,7 @@ const Experience = () => {
             <AddItemButton onClick={addExperience}>
                 ADD ANOTHER EXPERIENCE
             </AddItemButton>
-        </EditorLayout>
+        </>
     );
 };
 

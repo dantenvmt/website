@@ -1,12 +1,11 @@
 import React, { useCallback } from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
 import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
 import { useResume } from '../../context/ResumeContext';
-
+import { useParams } from 'react-router-dom';
 const CertificateItem = ({ certificate, index, onUpdate, onDelete, onSave }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -68,6 +67,7 @@ const CertificateItem = ({ certificate, index, onUpdate, onDelete, onSave }) => 
 
 const Certifications = () => {
     const { certifications, setCertifications, addCertificate } = useResume();
+    const { resumeId } = useParams(); // Get resumeId from URL
 
     const updateCertificate = useCallback((id, updatedData) => {
         setCertifications(currentCerts =>
@@ -76,21 +76,60 @@ const Certifications = () => {
     }, [setCertifications]);
 
     const deleteCertificate = (id) => {
-        if (certifications.length > 1) {
+        // If the section is not blank, allow deletion.
+        const certToDelete = certifications.find(cert => cert.id === id);
+        if (certifications.length > 1 || certToDelete.name) {
+            // Future: Add a fetch call to a delete_certification.php script here
             setCertifications(certifications.filter(cert => cert.id !== id));
         } else {
-            alert("You must have at least one certification entry.");
+            alert("You must have at least one certification entry, even if it's blank.");
         }
     };
 
-    const saveCertificate = (id) => {
+    const saveCertificate = async (id) => {
+        if (!resumeId) {
+            alert("Error: Cannot save without a resume ID.");
+            return;
+        }
+
         const certToSave = certifications.find(cert => cert.id === id);
-        console.log("Saving Certificate:", certToSave);
-        alert(`${certToSave.name || 'Certificate'} saved!`);
+
+        // If the entry is completely empty, don't save it.
+        if (!certToSave.name && !certToSave.organization && !certToSave.date && !certToSave.relevance) {
+            alert("Cannot save an empty certification.");
+            return;
+        }
+
+        try {
+            const response = await fetch('https://renaisons.com/api/save_certification.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...certToSave,
+                    resume_id: resumeId // Add the resume_id
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                if (result.certification_id) {
+                    updateCertificate(id, { ...certToSave, id: result.certification_id });
+                }
+                alert(`${certToSave.name || 'Certification'} saved!`);
+            } else {
+                alert('Error saving certification: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Failed to save certification:', error);
+            alert('An error occurred. Please try again.');
+        }
     };
 
     return (
-        <EditorLayout>
+        <>
             {certifications.map((cert, index) => (
                 <CertificateItem
                     key={cert.id}
@@ -104,7 +143,7 @@ const Certifications = () => {
             <AddItemButton onClick={addCertificate}>
                 ADD ANOTHER CERTIFICATE
             </AddItemButton>
-        </EditorLayout>
+        </>
     );
 };
 

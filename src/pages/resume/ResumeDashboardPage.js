@@ -1,36 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { resumeData } from '../../data/resumeData';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import ResumeCard from '../../components/resume/ResumeCard';
 import { PlusIcon, ChevronDownIcon, CheckIcon } from '@heroicons/react/24/solid';
-import CreateResumeModal from '../../components/resume/CreateResumeModal'; // Import the modal
+import CreateResumeModal from '../../components/resume/CreateResumeModal';
 
 const ResumeDashboardPage = () => {
-    const [sortedResumes, setSortedResumes] = useState([]);
+    const [resumes, setResumes] = useState([]); // State to hold resumes from the database
     const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
     const [currentSort, setCurrentSort] = useState('date');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const navigate = useNavigate(); // Hook for navigation
 
     const sortOptions = {
         date: 'Edited',
         alphabetical: 'Name',
     };
 
+    // --- Fetch resumes from the server when the component loads ---
     useEffect(() => {
-        handleSort('date');
-    }, []);
+        const fetchResumes = async () => {
+            try {
+                const response = await fetch('https://renaisons.com/api/get_resumes.php');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Sort the fetched resumes by date initially
+                    const sorted = data.resumes.sort((a, b) => new Date(b.last_edited) - new Date(a.last_edited));
+                    setResumes(sorted);
+                } else {
+                    console.error("Failed to fetch resumes:", data.message);
+                }
+            } catch (error) {
+                console.error("Error fetching resumes:", error);
+            }
+        };
+
+        fetchResumes();
+    }, []); // The empty array ensures this runs only once on mount
 
     const handleSort = (sortType) => {
         setCurrentSort(sortType);
-        const dataToSort = [...resumeData];
-        //sort by
+        const dataToSort = [...resumes];
         if (sortType === 'date') {
-            dataToSort.sort((a, b) => b.date - a.date);
+            dataToSort.sort((a, b) => new Date(b.last_edited) - new Date(a.last_edited));
         } else if (sortType === 'alphabetical') {
-            dataToSort.sort((a, b) => a.title.localeCompare(b.title));
+            dataToSort.sort((a, b) => a.resume_name.localeCompare(b.resume_name));
         }
-
-        setSortedResumes(dataToSort);
+        setResumes(dataToSort);
         setIsSortMenuOpen(false);
+    };
+
+    // --- Function to handle clicking on a resume card ---
+    const handleResumeClick = (resume) => {
+        navigate(`/resume/${resume.resume_id}/contact`, { state: { resumeName: resume.resume_name } });
     };
 
     return (
@@ -89,8 +111,11 @@ const ResumeDashboardPage = () => {
                     </div>
                 </button>
 
-                {sortedResumes.map((resume) => (
-                    <ResumeCard key={resume.id} resume={resume} />
+                {/* --- Map over the fetched resumes and render a card for each --- */}
+                {resumes.map((resume) => (
+                    <div key={resume.resume_id} onClick={() => handleResumeClick(resume)}>
+                        <ResumeCard resume={resume} />
+                    </div>
                 ))}
             </div>
         </div>

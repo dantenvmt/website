@@ -1,11 +1,11 @@
 import React, { useCallback } from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
 import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
 import { useResume } from '../../context/ResumeContext';
+import { useParams } from 'react-router-dom';
 
 const AwardItem = ({ award, index, onUpdate, onDelete, onSave }) => {
     const handleInputChange = (e) => {
@@ -60,9 +60,9 @@ const AwardItem = ({ award, index, onUpdate, onDelete, onSave }) => {
         </div>
     );
 };
-
 const Awards = () => {
     const { awards, setAwards, addAward } = useResume();
+    const { resumeId } = useParams();
 
     const updateAward = useCallback((id, updatedData) => {
         setAwards(currentAwards =>
@@ -71,21 +71,60 @@ const Awards = () => {
     }, [setAwards]);
 
     const deleteAward = (id) => {
-        if (awards.length > 1) {
+        const awardToDelete = awards.find(award => award.id === id);
+        if (awards.length > 1 || awardToDelete.name) {
+            // Future: Add a fetch call to a delete_award.php script here
             setAwards(awards.filter(award => award.id !== id));
         } else {
-            alert("You must have at least one award entry.");
+            alert("You must have at least one award entry, even if it's blank.");
         }
     };
 
-    const saveAward = (id) => {
+    const saveAward = async (id) => {
+        if (!resumeId) {
+            alert("Error: Cannot save award without a resume ID.");
+            return;
+        }
+
         const awardToSave = awards.find(award => award.id === id);
-        console.log("Saving Award:", awardToSave);
-        alert(`${awardToSave.name || 'Award'} saved!`);
+
+        // Don't save if the entry is completely empty
+        if (!awardToSave.name && !awardToSave.organization && !awardToSave.date && !awardToSave.relevance) {
+            alert("Cannot save an empty award entry.");
+            return;
+        }
+
+        try {
+            const response = await fetch('https://renaisons.com/api/save_award.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...awardToSave,
+                    resume_id: resumeId // Add the resume_id
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                if (result.award_id) {
+                    // Update the temporary frontend ID with the real one from the database
+                    updateAward(id, { ...awardToSave, id: result.award_id });
+                }
+                alert(`${awardToSave.name || 'Award'} saved!`);
+            } else {
+                alert('Error saving award: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Failed to save award:', error);
+            alert('An error occurred. Please try again.');
+        }
     };
 
     return (
-        <EditorLayout>
+        <>
             {awards.map((award, index) => (
                 <AwardItem
                     key={award.id}
@@ -93,13 +132,13 @@ const Awards = () => {
                     index={index}
                     onUpdate={updateAward}
                     onDelete={deleteAward}
-                    onSave={saveAward}
+                    onSave={() => saveAward(award.id)}
                 />
             ))}
             <AddItemButton onClick={addAward}>
                 ADD ANOTHER AWARD
             </AddItemButton>
-        </EditorLayout>
+        </>
     );
 };
 

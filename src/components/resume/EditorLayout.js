@@ -1,20 +1,76 @@
-import React, { useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import UpdateResumeModal from './UpdateResumeModal'; // Import the new modal
+import React, { useState, useEffect } from 'react';
+import { NavLink, useLocation, useNavigate, useParams, Outlet } from 'react-router-dom';
+import UpdateResumeModal from './UpdateResumeModal';
+import { useResume } from '../../context/ResumeContext'; // Import the useResume hook
 
-const EditorLayout = ({ children }) => {
+const EditorLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { resumeId } = useParams();
 
-    // State for the resume name, dropdown, and edit modal
-    const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Untitled Resume');
+    // Get the setter functions from your context
+    const { setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects, resetResume } = useResume();
+
+    const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Loading...');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchResumeData = async () => {
+            try {
+                const response = await fetch(`/api/get_resume_details.php?resume_id=${resumeId}`);
+                const result = await response.json();
+
+                if (result.status === 'success' && result.data) {
+                    const { data } = result;
+                    const contactInfo = data.contact_info || {};
+                    if (contactInfo.full_name) {
+                        contactInfo.fullName = contactInfo.full_name;
+                        delete contactInfo.full_name;
+                    }
+                    setContact(contactInfo);
+                    setSummary(data.summary?.summaries_description || '');
+                    setSkills(data.skills?.skills_description || '');
+                    setExperiences(data.experiences || []);
+                    setEducations(data.educations || []);
+                    setAwards(data.awards || []);
+                    setCertifications(data.certifications || []);
+                    setProjects(data.projects || []);
+                } else {
+                    console.error("Failed to fetch resume details:", result.message);
+                    navigate('/resume');
+                }
+            } catch (error) {
+                console.error("Error fetching resume data:", error);
+            }
+        };
+
+        if (resumeId) {
+            fetchResumeData();
+        }
+
+        return () => {
+            resetResume();
+        };
+    }, [
+        resumeId,
+        navigate,
+        setContact,
+        setSummary,
+        setSkills,
+        setExperiences,
+        setEducations,
+        setAwards,
+        setCertifications,
+        setProjects,
+        resetResume
+    ]); // <-- CORRECTED: All dependencies are now included
+
 
     const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
 
     const handleFinish = () => {
-        navigate('/resume/final', { state: { resumeName } });
+        navigate(`/resume/${resumeId}/final`, { state: { resumeName } });
     };
 
     const handleUpdateName = (newName) => {
@@ -22,11 +78,19 @@ const EditorLayout = ({ children }) => {
         setIsEditModalOpen(false);
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (window.confirm(`Are you sure you want to delete "${resumeName}"?`)) {
-            console.log(`Deleting ${resumeName}...`);
-            alert(`Resume "${resumeName}" deleted.`);
-            navigate('/resume');
+            try {
+                await fetch('https://renaisons.com/api/delete_resume.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resume_id: resumeId }),
+                });
+                alert(`Resume "${resumeName}" deleted.`);
+                navigate('/resume');
+            } catch (error) {
+                console.error('Failed to delete resume:', error);
+            }
         }
     };
 
@@ -54,9 +118,6 @@ const EditorLayout = ({ children }) => {
                                     <div className="absolute top-full mt-2 w-48 bg-[#1e293b] border border-gray-700 rounded-md shadow-lg z-20">
                                         <ul>
                                             <li><button onClick={() => { setIsEditModalOpen(true); setIsDropdownOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600">Edit</button></li>
-                                            <li><button className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600" disabled>Duplicate</button></li>
-                                            <li><button className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600" disabled>Review</button></li>
-                                            <li><button className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600" disabled>Download</button></li>
                                             <li><button onClick={handleDelete} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white">Delete</button></li>
                                         </ul>
                                     </div>
@@ -66,7 +127,7 @@ const EditorLayout = ({ children }) => {
                                 {navItems.map((item) => (
                                     <NavLink
                                         key={item}
-                                        to={`/resume/${item.toLowerCase()}`}
+                                        to={`/resume/${resumeId}/${item.toLowerCase()}`}
                                         state={{ resumeName }}
                                         className={({ isActive }) =>
                                             `px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${isActive
@@ -89,7 +150,9 @@ const EditorLayout = ({ children }) => {
                             </button>
                         </div>
                     </nav>
-                    <main>{children}</main>
+                    <main>
+                        <Outlet />
+                    </main>
                 </div>
             </div>
         </>

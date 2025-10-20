@@ -1,12 +1,26 @@
 import React, { useCallback } from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
 import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
 import { useResume } from '../../context/ResumeContext';
-
+import { useParams } from 'react-router-dom';
+import { useState } from 'react';
+const FeedbackModal = ({ title, message, onClose, isError }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-lg p-8 max-w-sm w-full mx-4">
+            <h3 className={`text-lg font-bold mb-4 ${isError ? 'text-red-500' : 'text-green-500'}`}>{title}</h3>
+            <p className="text-neutral-300 mb-6">{message}</p>
+            <button
+                onClick={onClose}
+                className={`w-full text-white font-semibold py-2 px-4 rounded-md transition-colors ${isError ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+                OK
+            </button>
+        </div>
+    </div>
+);
 const EducationItem = ({ education, index, onUpdate, onDelete, onSave }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -64,9 +78,14 @@ const EducationItem = ({ education, index, onUpdate, onDelete, onSave }) => {
     );
 };
 
-
 const Education = () => {
     const { educations, setEducations, addEducation } = useResume();
+    const { resumeId } = useParams();
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
+
+    const showModal = (title, message, isError = true) => {
+        setModalInfo({ isOpen: true, title, message, isError });
+    };
 
     const updateEducation = useCallback((id, updatedData) => {
         setEducations(currentEducations =>
@@ -82,14 +101,49 @@ const Education = () => {
         }
     };
 
-    const saveEducation = (id) => {
+    const saveEducation = async (id) => {
+        if (!resumeId) {
+            showModal('Save Error', "Cannot save education without a resume ID.");
+            return;
+        }
+
         const educationToSave = educations.find(edu => edu.id === id);
-        console.log("Saving Education:", educationToSave);
-        alert(`${educationToSave.degree || 'Education'} saved!`);
+
+        // --- GPA Validation ---
+        if (educationToSave.gpa) {
+            const gpaValue = parseFloat(educationToSave.gpa);
+            if (isNaN(gpaValue) || gpaValue < 0.0 || gpaValue > 5.0) {
+                showModal('Invalid Input', 'Please enter a valid GPA between 0.0 and 5.0.');
+                return;
+            }
+        }
+
+        try {
+            const response = await fetch('/api/save_education.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...educationToSave, resume_id: resumeId }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                if (result.education_id) {
+                    updateEducation(id, { ...educationToSave, id: result.education_id });
+                }
+                showModal('Success', `${educationToSave.degree || 'Education'} saved!`, false);
+            } else {
+                showModal('Save Error', result.message || 'An unknown server error occurred.');
+            }
+        } catch (error) {
+            console.error('Failed to save education:', error);
+            showModal('Network Error', 'A critical error occurred. Please check the console.');
+        }
     };
 
     return (
-        <EditorLayout>
+        <>
+            {modalInfo.isOpen && <FeedbackModal title={modalInfo.title} message={modalInfo.message} isError={modalInfo.isError} onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })} />}
             {educations.map((edu, index) => (
                 <EducationItem
                     key={edu.id}
@@ -103,7 +157,7 @@ const Education = () => {
             <AddItemButton onClick={addEducation}>
                 ADD ANOTHER EDUCATION
             </AddItemButton>
-        </EditorLayout>
+        </>
     );
 };
 

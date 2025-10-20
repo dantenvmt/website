@@ -1,13 +1,35 @@
-import React from 'react';
-import EditorLayout from '../../components/resume/EditorLayout';
+import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import SaveButton from '../../components/common/SaveButton';
 import FormInput from '../../components/resume/FormInput';
 import Toggle from '../../components/resume/Toggle';
 import FormSelect from '../../components/resume/FormSelect';
 import { useResume } from '../../context/ResumeContext';
 
+// Modal component for displaying validation errors and success messages
+const FeedbackModal = ({ title, message, onClose, isError }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-lg p-8 max-w-sm w-full mx-4">
+            <h3 className={`text-lg font-bold mb-4 ${isError ? 'text-red-500' : 'text-green-500'}`}>{title}</h3>
+            <p className="text-neutral-300 mb-6">{message}</p>
+            <button
+                onClick={onClose}
+                className={`w-full text-white font-semibold py-2 px-4 rounded-md transition-colors ${isError ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+                OK
+            </button>
+        </div>
+    </div>
+);
+
 const Contact = () => {
     const { contact, setContact, contactToggles, setContactToggles } = useResume();
+    const { resumeId } = useParams();
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
+
+    const showModal = (title, message, isError = true) => {
+        setModalInfo({ isOpen: true, title, message, isError });
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -18,14 +40,61 @@ const Contact = () => {
         setContactToggles(prev => ({ ...prev, [name]: !prev[name] }));
     };
 
-    const handleSave = () => {
-        console.log("Saving Contact Info:", contact);
-        console.log("Saving Toggles:", contactToggles);
-        alert("Contact info saved!");
+    const handleSave = async () => {
+        if (!resumeId) {
+            showModal('Save Error', "No resume ID found. Cannot save.");
+            return;
+        }
+
+        // --- Frontend Validation ---
+        if (!contact.fullName) {
+            showModal('Invalid Input', 'Full Name is a required field.');
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.(com|net|org|edu|gov|mil|io|co|us|uk|ca)$/i;
+        if (contact.email && !emailRegex.test(contact.email)) {
+            showModal('Invalid Input', 'Please enter a valid email address.');
+            return;
+        }
+
+
+        const phoneRegex = /^(\+1\s?)?(\([0-9]{3}\)|[0-9]{3})([\s.-]?[0-9]{3})([\s.-]?[0-9]{4})$/;
+        if (contact.phone && !phoneRegex.test(contact.phone)) {
+            showModal('Invalid Input', 'Please enter a valid phone number format, like (123) 456-7890.');
+            return;
+        }
+
+        console.log("Saving contact info for resumeId:", resumeId);
+
+        try {
+            const response = await fetch('https://renaisons.com/api/save_contact.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    resume_id: resumeId,
+                    ...contact
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                showModal('Success', 'Contact info saved successfully!', false);
+            } else {
+                showModal('Save Error', result.message || 'An unknown server error occurred.');
+            }
+        } catch (error) {
+            console.error('Failed to save contact info:', error);
+            showModal('Network Error', 'A critical error occurred. Please check the console.');
+        }
     };
 
     return (
-        <EditorLayout>
+        <>
+            {modalInfo.isOpen && <FeedbackModal title={modalInfo.title} message={modalInfo.message} isError={modalInfo.isError} onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })} />}
             <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-8">
                 <form className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -129,9 +198,8 @@ const Contact = () => {
                     </div>
                 </form>
             </div>
-        </EditorLayout>
+        </>
     );
 };
 
 export default Contact;
-

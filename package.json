@@ -2,6 +2,7 @@
   "name": "my-app",
   "version": "0.1.0",
   "private": true,
+  "proxy": "https://renaisons.com",
   "homepage": "https://renaisons.com",
   "dependencies": {
     "@heroicons/react": "^2.2.0",

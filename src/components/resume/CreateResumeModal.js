@@ -15,34 +15,73 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
-    const handleManualBuild = (e) => {
+    const handleManualBuild = async (e) => {
         e.preventDefault();
         if (!resumeName) {
             alert('Please enter a resume name.');
             return;
         }
-        resetResume();
-        navigate('/resume/contact', { state: { resumeName: resumeName } });
-        handleClose();
+
+        try {
+            const response = await fetch('https://renaisons.com/api/create_resume.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resumeName: resumeName }),
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success' && result.resume_id) {
+                resetResume();
+                const targetUrl = `/resume/${result.resume_id}/contact`;
+                navigate(targetUrl, { state: { resumeName: resumeName } });
+                handleClose();
+            } else {
+                alert('Error from server: ' + (result.message || 'Unknown error.'));
+            }
+        } catch (error) {
+            console.error('Failed to create resume:', error);
+            alert('A critical error occurred. Please check the console.');
+        }
     };
 
-    const handleAiBuild = (e) => {
+    const handleAiBuild = async (e) => {
         e.preventDefault();
-        if (!uploadedFile) {
-            alert('Please upload your resume file.');
+        if (!resumeName) {
+            alert('Please enter a resume name.');
             return;
         }
+        // Even for AI build, we first create the resume to get an ID
+        try {
+            const response = await fetch('https://renaisons.com/api/create_resume.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resumeName: resumeName }),
+            });
 
-        resetResume();
-        setJobDescription(jobInput);
+            const result = await response.json();
 
-        alert("Simulating AI analysis... Your resume will be pre-filled with placeholder data.");
-        setContact({ fullName: 'Thuan Nguyen (AI Parsed)', email: 'thuannguyen.vm@gmail.com', phone: '9032599470', linkedin: 'thuan-nguyen-dev', city: 'Richardson', state: 'Texas', country: 'United States' });
-        setSummary('AI-parsed summary: Results-oriented Data Scientist with expertise in machine learning and data warehousing.');
-        setExperiences([{ id: Date.now(), role: 'Data Scientist (AI Parsed)', company: 'A.I. Tech Inc.', startDate: 'Jan 2025', endDate: 'Sep 2025', isCurrent: false, location: 'Dallas, TX', bullets: '• Leveraged machine learning models to increase sales forecasting accuracy by 25%.\n• Designed and implemented a new data warehousing solution, reducing query times by 40%.', aiUsesLeft: 3 }]);
+            if (result.status === 'success' && result.resume_id) {
+                resetResume();
+                setJobDescription(jobInput);
 
-        navigate('/resume/contact', { state: { resumeName: `${resumeName} (AI)` } });
-        handleClose();
+                // Now, set the AI-parsed data locally
+                alert("Simulating AI analysis... Your resume will be pre-filled with placeholder data.");
+                setContact({ fullName: 'Thuan Nguyen (AI Parsed)', email: 'thuannguyen.vm@gmail.com', phone: '9032599470', linkedin: 'thuan-nguyen-dev', city: 'Richardson', state: 'Texas', country: 'United States' });
+                setSummary('AI-parsed summary: Results-oriented Data Scientist with expertise in machine learning and data warehousing.');
+                setExperiences([{ id: Date.now(), role: 'Data Scientist (AI Parsed)', company: 'A.I. Tech Inc.', startDate: 'Jan 2025', endDate: 'Sep 2025', isCurrent: false, location: 'Dallas, TX', bullets: '• Leveraged machine learning models to increase sales forecasting accuracy by 25%.\n• Designed and implemented a new data warehousing solution, reducing query times by 40%.', aiUsesLeft: 3 }]);
+
+                // Navigate to the correct dynamic URL
+                const targetUrl = `/resume/${result.resume_id}/contact`;
+                navigate(targetUrl, { state: { resumeName: `${resumeName} (AI)` } });
+                handleClose();
+            } else {
+                alert('Error from server: ' + (result.message || 'Unknown error.'));
+            }
+        } catch (error) {
+            console.error('Failed to create AI resume:', error);
+            alert('A critical error occurred. Please check the console.');
+        }
     };
 
     const handleClose = () => {

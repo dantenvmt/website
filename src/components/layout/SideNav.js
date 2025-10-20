@@ -40,38 +40,39 @@ const NavHeader = ({ isDesktopNavOpen, onToggle }) => (
     </div>
 );
 
-const MainNavPanel = ({ handleNavClick, user }) => (
+const MainNavPanel = ({ handleNavClick, user, onOpenLoginModal }) => (
+
     <nav className="flex flex-col space-y-2">
         {navLinks
             .filter(link => {
-                // Always show if no specific role is required
-                if (!link.adminOnly && !link.userOnly) {
-                    return true;
-                }
-                // Show admin links only if user is admin
-                if (link.adminOnly && user && user.role === 'admin') {
-                    return true;
-                }
-                // Show user links only if user is a regular user
-                if (link.userOnly && user && user.role === 'user') {
-                    return true;
-                }
-                // Otherwise, hide the link
+                if (!link.adminOnly && !link.userOnly) return true;
+                if (link.adminOnly && user && user.role === 'admin') return true;
+                if (link.userOnly && user && user.role === 'user') return true;
                 return false;
             })
-            .map(link => (
-                <Link
-                    key={link.id}
-                    to={link.id === 'home' ? '/' : `/${link.id}`}
-                    onClick={() => handleNavClick(link)}
-                    className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                >
-                    <span>{link.title}</span>
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ArrowIcon />
-                    </span>
-                </Link>
-            ))}
+            .map(link => {
+                const isResumeOptimization = link.id === 'resume-optimization' || link.title.toLowerCase().includes('resume');
+                return (
+                    <Link
+                        key={link.id}
+                        to={link.id === 'home' ? '/' : `/${link.id}`}
+                        onClick={(e) => {
+                            if (isResumeOptimization && !user) {
+                                e.preventDefault();
+                                if (onOpenLoginModal) onOpenLoginModal();
+                                return;
+                            }
+                            handleNavClick(link);
+                        }}
+                        className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                    >
+                        <span>{link.title}</span>
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ArrowIcon />
+                        </span>
+                    </Link>
+                );
+            })}
     </nav>
 );
 

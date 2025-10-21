@@ -1,11 +1,9 @@
 // src/pages/user/ChangePasswordPage.js
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import FormInput from '../../components/resume/FormInput'; // <-- IMPORT the component
 
 // Main Change Password Page Component
 const ChangePasswordPage = () => {
-    const { user } = useAuth();
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,10 +60,10 @@ const ChangePasswordPage = () => {
 
     return (
         // Adjusted padding and background to better match the FormInput style
-        <div className="p-8 md:p-12 text-white"> 
+        <div className="p-8 md:p-12 text-white">
             <h1 className="text-4xl font-bold mb-6 text-center">Change Password</h1>
             {/* Using bg-neutral-800, which is close to the input's bg-[#0f172a] */}
-            <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700 max-w-lg mx-auto">
+            <section className="p-6 rounded-lg border border-neutral-700 max-w-lg mx-auto">
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <FormInput
                         label="Current Password"

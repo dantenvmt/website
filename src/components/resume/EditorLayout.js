@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, Outlet } from 'react-router-dom';
 import UpdateResumeModal from './UpdateResumeModal';
-import { useResume } from '../../context/ResumeContext'; // Import the useResume hook
-
+import { useResume } from '../../context/ResumeContext';
+import ConfirmModal from '../common/ConfirmModal';
 const EditorLayout = () => {
+
     const location = useLocation();
     const navigate = useNavigate();
     const { resumeId } = useParams();
 
-    // Get the setter functions from your context
     const { setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects, resetResume } = useResume();
 
     const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Loading...');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
+    const [modalState, setModalState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        confirmText: 'Confirm'
+    });
     useEffect(() => {
         const fetchResumeData = async () => {
             try {
@@ -64,7 +70,7 @@ const EditorLayout = () => {
         setCertifications,
         setProjects,
         resetResume
-    ]); // <-- CORRECTED: All dependencies are now included
+    ]);
 
 
     const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
@@ -78,20 +84,43 @@ const EditorLayout = () => {
         setIsEditModalOpen(false);
     };
 
-    const handleDelete = async () => {
-        if (window.confirm(`Are you sure you want to delete "${resumeName}"?`)) {
-            try {
-                await fetch('https://renaisons.com/api/delete_resume.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume_id: resumeId }),
-                });
-                alert(`Resume "${resumeName}" deleted.`);
-                navigate('/resume');
-            } catch (error) {
-                console.error('Failed to delete resume:', error);
+    const handleDeleteClick = () => {
+        setModalState({
+            isOpen: true,
+            title: 'Delete Resume',
+            message: `Are you sure you want to permanently delete "${resumeName || 'this resume'}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            onConfirm: performDelete // Set the action to perform on confirm
+        });
+    };
+
+    const performDelete = async () => {
+        setModalState({ isOpen: false }); // Close modal first
+        try {
+            const response = await fetch('https://renaisons.com/api/delete_resume.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resume_id: resumeId }),
+                credentials: 'include', // Important if your API uses sessions
+            });
+            const result = await response.json(); // Always try to parse JSON
+
+            if (result.status === 'success') {
+                alert(`Resume "${resumeName}" deleted.`); // Simple feedback for now
+                navigate('/resume'); // Navigate back to the dashboard
+            } else {
+                // Show error from API if available
+                console.error('API Error:', result.message || 'Unknown error');
+                alert(`Error deleting resume: ${result.message || 'Please try again.'}`);
             }
+        } catch (error) {
+            console.error('Failed to delete resume:', error);
+            alert('A network error occurred while deleting the resume.');
         }
+    };
+
+    const handleModalClose = () => {
+        setModalState({ isOpen: false });
     };
 
     return (
@@ -118,7 +147,7 @@ const EditorLayout = () => {
                                     <div className="absolute top-full mt-2 w-48 bg-[#1e293b] border border-gray-700 rounded-md shadow-lg z-20">
                                         <ul>
                                             <li><button onClick={() => { setIsEditModalOpen(true); setIsDropdownOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600">Edit</button></li>
-                                            <li><button onClick={handleDelete} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white">Delete</button></li>
+                                            <li><button onClick={handleDeleteClick} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white">Delete</button></li>
                                         </ul>
                                     </div>
                                 )}
@@ -155,6 +184,14 @@ const EditorLayout = () => {
                     </main>
                 </div>
             </div>
+            <ConfirmModal
+                isOpen={modalState.isOpen}
+                onClose={handleModalClose}
+                onConfirm={modalState.onConfirm}
+                title={modalState.title}
+                message={modalState.message}
+                confirmText={modalState.confirmText}
+            />
         </>
     );
 };

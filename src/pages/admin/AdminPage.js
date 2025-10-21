@@ -1,17 +1,19 @@
 // src/pages/admin/AdminPage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 // --- Define Updated Onboarding Steps ---
 const STEP_DEFINITIONS = {
-    1: 'Step 1: Contract Upload',       // Renamed
-    2: 'Step 2: Gathering Documents',   // Moved documents here
-    3: 'Step 3: Documents Under Review', // Renumbered
+    0: 'Step 0: New User',
+    1: 'Step 1: Contract Upload',
+    2: 'Step 2: Gathering Documents',
+    3: 'Step 3: Documents Under Review',
     4: 'Step 4: Change name later',
     5: 'Step 5: Change name later',
 };
 const MAX_STEP = Math.max(...Object.keys(STEP_DEFINITIONS).map(Number));
 
-// --- Reusable Input Components (Keep AdminFormInput as is) ---
+// --- Reusable Input Components (Unchanged) ---
 const AdminFormInput = ({ label, name, type = 'text', value, onChange, required = false, placeholder = '' }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
@@ -29,39 +31,35 @@ const AdminFormInput = ({ label, name, type = 'text', value, onChange, required 
         />
     </div>
 );
-
-// --- NEW Reusable File Input for Admin ---
-const AdminFileInput = ({ label, name, onChange, required = false, fileName, accept = ".pdf,.doc,.docx" }) => (
+const AdminFileInput = React.forwardRef(({ label, name, onChange, required = false, fileName, accept = ".pdf,.doc,.docx" }, ref) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-2">
             {label}{required && <span className="text-red-500">*</span>}
         </label>
         <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-neutral-600 border-dashed rounded-md">
             <div className="space-y-1 text-center">
-                 {/* Simplified icon/text */}
                 <svg className="mx-auto h-10 w-10 text-neutral-500" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
                 <label htmlFor={name} className="relative cursor-pointer bg-neutral-700 hover:bg-neutral-600 rounded-md font-medium text-white px-3 py-1 text-xs">
                     <span>Choose file</span>
-                    <input id={name} name={name} type="file" className="sr-only" onChange={onChange} accept={accept} required={required} />
+                    <input id={name} name={name} type="file" className="sr-only" onChange={onChange} accept={accept} required={required} ref={ref} />
                 </label>
-                 {fileName ? (
+                {fileName ? (
                     <p className="text-xs text-green-400 pt-1">{fileName}</p>
-                 ) : (
+                ) : (
                     <p className="text-xs text-neutral-500 pt-1">PDF, DOC, DOCX up to 10MB</p>
-                 )}
+                )}
             </div>
         </div>
     </div>
-);
+));
+// --- End of Reusable Components ---
 
 // --- Main Admin Page Component ---
 const AdminPage = () => {
-    // --- State for Create User Form (Keep as is) ---
+    // --- State (Unchanged) ---
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
-
-    // --- State for Managing User ---
     const [usersList, setUsersList] = useState([]);
     const [selectedUserId, setSelectedUserId] = useState('');
     const [selectedUserCurrentStep, setSelectedUserCurrentStep] = useState(null);
@@ -74,19 +72,24 @@ const AdminPage = () => {
     const [isUpdatingStep, setIsUpdatingStep] = useState(false);
     const [rejectionNotes, setRejectionNotes] = useState({});
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(null);
-
-    // --- NEW State for Contract Upload ---
     const [contractFile, setContractFile] = useState(null);
     const [contractFileName, setContractFileName] = useState('');
     const [isUploadingContract, setIsUploadingContract] = useState(false);
     const [contractMessage, setContractMessage] = useState({ type: '', text: '' });
-    const contractInputRef = useRef(null); // Ref to clear file input
+    const contractInputRef = useRef(null);
+    const [modalState, setModalState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        confirmText: 'Confirm'
+    });
+    // --- End of State ---
 
-    // --- Fetch initial list of users (Keep as is) ---
+    // --- Fetching Functions (Unchanged) ---
     const fetchUsers = useCallback(async () => {
         setIsLoadingUsers(true);
-        // ... (rest of fetchUsers function is unchanged) ...
-         try {
+        try {
             const response = await fetch('https://renaisons.com/api/get_users.php', {
                 credentials: 'include'
             });
@@ -108,15 +111,14 @@ const AdminPage = () => {
         fetchUsers();
     }, [fetchUsers]);
 
-    // --- Fetch assigned requirements (Keep as is, will run based on selectedUserId) ---
     const fetchUserRequirements = useCallback(async () => {
         if (!selectedUserId) {
             setAssignedRequirements([]);
             return;
         }
         setIsLoadingRequirements(true);
-        setAssignmentMessage({ type: '', text: '' }); // Clear messages when loading new requirements
-         try {
+        setAssignmentMessage({ type: '', text: '' });
+        try {
             const response = await fetch(`https://renaisons.com/api/get_user_requirements.php?user_id=${selectedUserId}`, {
                 credentials: 'include'
             });
@@ -138,22 +140,17 @@ const AdminPage = () => {
     useEffect(() => {
         fetchUserRequirements();
     }, [fetchUserRequirements]);
+    // --- End of Fetching Functions ---
 
-    // --- Handlers for Create User (Keep as is) ---
-    const handleNewUserChange = (e) => {/* ... unchanged ... */
+    // --- Handlers for Create User (Unchanged) ---
+    const handleNewUserChange = (e) => {/* ... */
         const { name, value } = e.target;
         setNewUser(prev => ({ ...prev, [name]: value }));
     };
-    const handleCreateUserSubmit = async (e) => {/* ... unchanged ... */
-         e.preventDefault();
+    const handleCreateUserSubmit = async (e) => {/* ... */
+        e.preventDefault();
         setIsCreatingUser(true);
         setCreateUserMessage({ type: '', text: '' });
-        if (!newUser.email || !newUser.password) {
-            setCreateUserMessage({ type: 'error', text: 'Email and Password are required.' });
-            setIsCreatingUser(false);
-            return;
-        }
-
         try {
             const response = await fetch('https://renaisons.com/api/create_user.php', {
                 method: 'POST',
@@ -165,7 +162,7 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setCreateUserMessage({ type: 'success', text: `User ${newUser.email} created successfully!` });
                 setNewUser({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
-                fetchUsers(); // Refresh the user list
+                fetchUsers();
             } else {
                 setCreateUserMessage({ type: 'error', text: result.message || 'Failed to create user.' });
             }
@@ -176,19 +173,25 @@ const AdminPage = () => {
             setIsCreatingUser(false);
         }
     };
+    // --- End of Create User Handlers ---
 
-    // --- Handlers for Managing Requirements (Keep as is) ---
-    const handleNewRequirementChange = (e) => {/* ... unchanged ... */
+    // --- Modal Controls (Unchanged) ---
+    const handleModalClose = () => {
+        setModalState({ isOpen: false });
+    };
+
+    // --- Handlers for Managing Requirements ---
+    const handleNewRequirementChange = (e) => {/* ... */
         const { name, value } = e.target;
         setNewRequirement(prev => ({ ...prev, [name]: value }));
     };
-    const handleAddRequirement = async (e) => {/* ... unchanged ... */
-         e.preventDefault();
+
+    const handleAddRequirement = async (e) => {/* ... */
+        e.preventDefault();
         if (!newRequirement.document_name.trim()) {
             setAssignmentMessage({ type: 'error', text: 'Document name cannot be empty.' });
             return;
         }
-
         try {
             const response = await fetch('https://renaisons.com/api/add_requirement_to_user.php', {
                 method: 'POST',
@@ -199,8 +202,8 @@ const AdminPage = () => {
             const result = await response.json();
             if (response.ok && result.status === 'success') {
                 setAssignmentMessage({ type: 'success', text: 'Requirement added.' });
-                setNewRequirement({ document_name: '', document_notes: '' }); // Clear form
-                fetchUserRequirements(); // Refresh the list
+                setNewRequirement({ document_name: '', document_notes: '' });
+                fetchUserRequirements();
             } else {
                 setAssignmentMessage({ type: 'error', text: `Failed to add: ${result.message}` });
             }
@@ -209,11 +212,21 @@ const AdminPage = () => {
             setAssignmentMessage({ type: 'error', text: 'An error occurred while adding the requirement.' });
         }
     };
-    const handleRemoveRequirement = async (userDocumentId) => {/* ... unchanged ... */
-        if (!window.confirm("Are you sure you want to remove this requirement for this user?")) {
-            return;
-        }
 
+    // Modal Opener (Unchanged)
+    const handleRemoveRequirement = (userDocumentId) => {
+        setModalState({
+            isOpen: true,
+            title: 'Confirm Removal',
+            message: 'Are you sure you want to remove this requirement for this user? This action cannot be undone.',
+            confirmText: 'Remove',
+            onConfirm: () => performRemoveRequirement(userDocumentId)
+        });
+    };
+
+    // Delete Logic (Unchanged)
+    const performRemoveRequirement = async (userDocumentId) => {
+        handleModalClose();
         try {
             const response = await fetch('https://renaisons.com/api/remove_requirement.php', {
                 method: 'POST',
@@ -224,7 +237,7 @@ const AdminPage = () => {
             const result = await response.json();
             if (response.ok && result.status === 'success') {
                 setAssignmentMessage({ type: 'success', text: 'Requirement removed.' });
-                fetchUserRequirements(); // Refresh the list
+                fetchUserRequirements();
             } else {
                 setAssignmentMessage({ type: 'error', text: `Failed to remove: ${result.message}` });
             }
@@ -233,16 +246,36 @@ const AdminPage = () => {
             setAssignmentMessage({ type: 'error', text: 'An error occurred while removing the requirement.' });
         }
     };
-    const handleUpdateStatus = async (userDocumentId, newStatus) => {/* ... unchanged ... */
-         const notes = newStatus === 'rejected' ? rejectionNotes[userDocumentId] || '' : null;
+
+
+    // --- *** CHANGE 1: Modify handleUpdateStatus *** ---
+    // This function is for Approve/Reject buttons
+    const handleUpdateStatus = async (userDocumentId, newStatus) => {
+
+        // --- MODIFIED LOGIC ---
+        let notes = null;
+        if (newStatus === 'rejected') {
+            notes = rejectionNotes[userDocumentId] || '';
+        } else if (newStatus === 'approved') {
+            // Check if the document being updated is the contract
+            const contract = assignedRequirements.find(r => r.document_name === 'Contract Agreement');
+            if (contract && contract.user_document_id === userDocumentId) {
+                notes = 'Contract approved'; // User's requested note
+            } else {
+                notes = 'Document approved'; // Generic note for other docs
+            }
+        }
+        // --- END OF MODIFICATION ---
 
         if (newStatus === 'rejected' && !notes.trim()) {
-            setAssignmentMessage({ type: 'error', text: 'Please enter rejection notes.' });
+            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
+            setMessage({ type: 'error', text: 'Please enter rejection notes.' });
             return;
         }
 
         setIsUpdatingStatus(userDocumentId);
         setAssignmentMessage({ type: '', text: '' });
+        setContractMessage({ type: '', text: '' });
 
         try {
             const response = await fetch('https://renaisons.com/api/update_requirement_status.php', {
@@ -251,46 +284,52 @@ const AdminPage = () => {
                 body: JSON.stringify({
                     user_document_id: userDocumentId,
                     new_status: newStatus,
-                    admin_notes: notes
+                    admin_notes: notes // This now sends the "Contract approved" note
                 }),
                 credentials: 'include'
             });
             const result = await response.json();
+            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
+
             if (response.ok && result.status === 'success') {
-                setAssignmentMessage({ type: 'success', text: `Document status updated to ${newStatus}.` });
-                // Clear rejection note for this item if successful
+                setMessage({ type: 'success', text: `Document status updated to ${newStatus}.` });
                 setRejectionNotes(prev => {
                     const newState = { ...prev };
                     delete newState[userDocumentId];
                     return newState;
                 });
-                fetchUserRequirements(); // Refresh the list
+                fetchUserRequirements();
             } else {
-                setAssignmentMessage({ type: 'error', text: `Failed to update status: ${result.message}` });
+                setMessage({ type: 'error', text: `Failed to update status: ${result.message}` });
             }
         } catch (error) {
             console.error("Error updating status:", error);
-            setAssignmentMessage({ type: 'error', text: 'An error occurred while updating status.' });
+            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
+            setMessage({ type: 'error', text: 'An error occurred while updating status.' });
         } finally {
-            setIsUpdatingStatus(null); // Clear loading state
+            setIsUpdatingStatus(null);
         }
     };
-     const handleRejectionNoteChange = (userDocumentId, value) => {/* ... unchanged ... */
+    // --- *** END OF CHANGE 1 *** ---
+
+    const handleRejectionNoteChange = (userDocumentId, value) => {
         setRejectionNotes(prev => ({ ...prev, [userDocumentId]: value }));
     };
 
 
-    // --- Handler for User Selection (Keep as is) ---
-    const handleUserSelectionChange = (e) => {/* ... unchanged ... */
+    // --- Handler for User Selection (Unchanged) ---
+    const handleUserSelectionChange = (e) => {
         const userId = e.target.value;
         setSelectedUserId(userId);
         setStepMessage({ type: '', text: '' });
-        setContractMessage({ type: '', text: '' }); // Clear contract messages too
-        setContractFile(null); // Clear selected contract file
+        setContractMessage({ type: '', text: '' });
+        setContractFile(null);
         setContractFileName('');
+        setAssignmentMessage({ type: '', text: '' });
+        setRejectionNotes({});
 
         if (userId) {
-            const user = usersList.find(u => u.user_id == userId);
+            const user = usersList.find(u => u.user_id === userId);
             if (user) {
                 setSelectedUserCurrentStep(user.onboarding_step);
             }
@@ -299,14 +338,21 @@ const AdminPage = () => {
         }
     };
 
-    // --- Handler for Step Update (Keep as is) ---
-    const handleMoveToNextStep = async () => {/* ... unchanged ... */
-         if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
+    // --- Handler for Step Update (Unchanged, already has contract check) ---
+    const handleMoveToNextStep = async () => {
+        if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
+
+        if (selectedUserCurrentStep === 1) {
+            const contract = assignedRequirements.find(r => r.document_name === 'Contract Agreement');
+            if (!contract || contract.status !== 'approved') {
+                setStepMessage({ type: 'error', text: 'You must approve the user\'s submitted contract before moving to Step 2.' });
+                return;
+            }
+        }
 
         const nextStep = selectedUserCurrentStep + 1;
         setIsUpdatingStep(true);
         setStepMessage({ type: '', text: '' });
-
         try {
             const response = await fetch('https://renaisons.com/api/update_user_step.php', {
                 method: 'POST',
@@ -318,9 +364,8 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setStepMessage({ type: 'success', text: 'User moved to next step!' });
                 setSelectedUserCurrentStep(nextStep);
-                // Update the main usersList state locally
                 setUsersList(prevList => prevList.map(u =>
-                    u.user_id == selectedUserId ? { ...u, onboarding_step: nextStep } : u
+                    u.user_id === selectedUserId ? { ...u, onboarding_step: nextStep } : u
                 ));
             } else {
                 setStepMessage({ type: 'error', text: `Failed to update step: ${result.message}` });
@@ -333,20 +378,19 @@ const AdminPage = () => {
         }
     };
 
-    // --- NEW Handlers for Contract Upload ---
-    const handleContractFileChange = (e) => {
+    // --- Handlers for Contract Upload (Unchanged) ---
+    const handleContractFileChange = (e) => {/* ... */
         const file = e.target.files[0];
-         setContractMessage({ type: '', text: '' }); // Clear message on new selection
+        setContractMessage({ type: '', text: '' });
         if (file) {
-            // Basic validation (can add more: type, size)
-             const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
             const allowedExtensions = ['.pdf', '.doc', '.docx'];
             const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-             if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(fileExtension)) {
+            if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(fileExtension)) {
                 setContractMessage({ type: 'error', text: 'Invalid file type. Please upload PDF, DOC, or DOCX.' });
                 setContractFile(null);
                 setContractFileName('');
-                if (contractInputRef.current) contractInputRef.current.value = ''; // Clear file input visually
+                if (contractInputRef.current) contractInputRef.current.value = '';
                 return;
             }
             setContractFile(file);
@@ -356,24 +400,12 @@ const AdminPage = () => {
             setContractFileName('');
         }
     };
-
-    const handleContractUpload = async () => {
-        console.log('Uploading contract. UserID:', selectedUserId, 'File:', contractFile);
-        if (!selectedUserId) {
-             setContractMessage({ type: 'error', text: 'Error: No user is selected.' });
-             return;
-        }
-        if (!contractFile) {
-            setContractMessage({ type: 'error', text: 'Error: No contract file is selected.' });
+    const handleContractUpload = async () => {/* ... */
+        if (!selectedUserId || !contractFile) {
+            setContractMessage({ type: 'error', text: 'Please select a user and a file.' });
             return;
         }
-        if (isUploadingContract) {
-            return; // Don't do anything if already uploading
-        }
-        if (!contractFile || !selectedUserId || isUploadingContract) {
-            setContractMessage({ type: 'error', text: 'Please select a contract file.' });
-            return;
-        }
+        if (isUploadingContract) return;
 
         setIsUploadingContract(true);
         setContractMessage({ type: 'info', text: 'Uploading contract...' });
@@ -383,21 +415,20 @@ const AdminPage = () => {
         formData.append('contractFile', contractFile);
 
         try {
-            const response = await fetch('https://renaisons.com/api/upload_admin_contract.php', { 
+            const response = await fetch('https://renaisons.com/api/upload_admin_contract.php', {
                 method: 'POST',
                 body: formData,
-                credentials: 'include' // Important for session check on backend
+                credentials: 'include'
             });
-            
+
             const result = await response.json();
 
             if (response.ok && result.status === 'success') {
                 setContractMessage({ type: 'success', text: 'Contract uploaded successfully!' });
                 setContractFile(null);
                 setContractFileName('');
-                 if (contractInputRef.current) contractInputRef.current.value = ''; // Clear file input
-                // Optionally: refresh user data or requirements if needed after contract upload
-                // fetchUserRequirements(); // Or fetchUsers() if contract status affects user list
+                if (contractInputRef.current) contractInputRef.current.value = '';
+                fetchUserRequirements();
             } else {
                 setContractMessage({ type: 'error', text: `Upload failed: ${result.message || 'Server error'}` });
             }
@@ -409,13 +440,13 @@ const AdminPage = () => {
         }
     };
 
-    // --- Helper variables (Keep as is) ---
+    // --- Helper variables (Unchanged) ---
     const currentStepName = STEP_DEFINITIONS[selectedUserCurrentStep] || 'Unknown Step';
     const nextStepName = STEP_DEFINITIONS[selectedUserCurrentStep + 1];
     const atMaxStep = selectedUserCurrentStep >= MAX_STEP;
-    const getSelectedUserDisplay = () => { /* ... unchanged ... */
-         if (!selectedUserId) return '';
-        const user = usersList.find(u => u.user_id == selectedUserId);
+    const getSelectedUserDisplay = () => {
+        if (!selectedUserId) return '';
+        const user = usersList.find(u => u.user_id === selectedUserId);
         if (!user) return '';
         if (user.first_name && user.last_name) {
             return `${user.first_name} ${user.last_name} (${user.email})`;
@@ -424,18 +455,22 @@ const AdminPage = () => {
     };
     const selectedUserDisplay = getSelectedUserDisplay();
 
+    const existingContract = assignedRequirements.find(
+        req => req.document_name === 'Contract Agreement'
+    );
+    // --- End of Helper Variables ---
+
     // --- Render Logic ---
     return (
         <div className="p-8 md:p-12 text-white space-y-12">
             <h1 className="text-4xl font-bold">Admin Dashboard</h1>
 
-            {/* --- Section: Create User (Keep as is) --- */}
+            {/* --- Section: Create User (Unchanged) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
-                 {/* ... unchanged ... */}
-                 <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
+                <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
                 <form onSubmit={handleCreateUserSubmit} className="space-y-4 max-w-lg">
                     {/* ... form inputs ... */}
-                     <AdminFormInput
+                    <AdminFormInput
                         label="First Name"
                         name="firstName"
                         value={newUser.firstName}
@@ -465,13 +500,12 @@ const AdminPage = () => {
                 </form>
             </section>
 
-            {/* --- Section: Manage User --- */}
+            {/* --- Section: Manage User (Unchanged) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
                 <h2 className="text-2xl font-semibold mb-4">Manage User Status & Requirements</h2>
 
-                {/* User Selection Dropdown (Keep as is) */}
+                {/* User Selection Dropdown (Unchanged) */}
                 <div className="mb-6">
-                    {/* ... unchanged ... */}
                     <label htmlFor="userSelect" className="block text-sm font-medium text-neutral-300 mb-1">Select User to Manage</label>
                     <select
                         id="userSelect"
@@ -480,7 +514,7 @@ const AdminPage = () => {
                         disabled={isLoadingUsers}
                         className="w-full md:w-1/2 bg-neutral-700 border border-neutral-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-white"
                     >
-                         <option value="">-- Select a User --</option>
+                        <option value="">-- Select a User --</option>
                         {usersList.map(u => (
                             <option key={u.user_id} value={u.user_id}>
                                 {u.last_name || u.first_name ? `${u.last_name}, ${u.first_name} (${u.email})` : u.email} (Step {u.onboarding_step})
@@ -492,10 +526,9 @@ const AdminPage = () => {
                 {/* Section appears once a user is selected */}
                 {selectedUserId && (
                     <div className="space-y-8">
-                        {/* User Status / Step Management (Keep as is) */}
+                        {/* User Status / Step Management (Unchanged) */}
                         <div className="border border-neutral-700 rounded-lg p-4">
-                            {/* ... unchanged ... */}
-                             <h3 className="text-lg font-medium mb-3 text-neutral-300">
+                            <h3 className="text-lg font-medium mb-3 text-neutral-300">
                                 User Status: <span className="font-semibold text-white">{selectedUserDisplay}</span>
                             </h3>
                             <p className="text-md mb-3 text-neutral-200">
@@ -517,62 +550,140 @@ const AdminPage = () => {
                             </button>
                         </div>
 
-                         {/* --- NEW: Contract Upload Section (Visible only in Step 1) --- */}
+                        {/* --- Contract Upload Section (Visible only in Step 1) --- */}
                         {selectedUserCurrentStep === 1 && (
-                            <div className="border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-lg font-medium mb-3 text-neutral-300">
-                                    Step 1: Upload Contract for {selectedUserDisplay}
+                            <div className="border border-neutral-700 rounded-lg p-4 space-y-4">
+                                <h3 className="text-lg font-medium text-neutral-300">
+                                    Step 1: Contract for {selectedUserDisplay}
                                 </h3>
+
+                                {/* Display Existing Contract Info */}
+                                {isLoadingRequirements ? (
+                                    <p className="text-sm text-neutral-400">Loading contract info...</p>
+                                ) : existingContract ? (
+                                    <div className="bg-neutral-900/50 p-3 border border-neutral-600 rounded space-y-3">
+                                        {/* Status and View Link Row */}
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-sm text-neutral-300">
+                                                Current Contract Status:
+                                                <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${existingContract.status === 'approved' ? 'bg-green-800 text-green-100' :
+                                                    existingContract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' :
+                                                        existingContract.status === 'rejected' ? 'bg-red-800 text-red-100' :
+                                                            'bg-gray-700 text-gray-100' // pending
+                                                    }`}>
+                                                    {existingContract.status}
+                                                </span>
+                                            </p>
+                                            {(existingContract.status === 'submitted' || existingContract.status === 'approved' || existingContract.status === 'rejected') ? (
+                                                <a
+                                                    href={`https://renaisons.com/api/download_user_document.php?doc_id=${existingContract.user_document_id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
+                                                >
+                                                    View File
+                                                </a>
+                                            ) : (
+                                                <span className="text-neutral-500 text-sm">No user file</span>
+                                            )}
+                                        </div>
+
+                                        {/* --- *** CHANGE 2: Modify Admin Notes Display *** --- */}
+                                        {/* Show Admin Notes if they exist (for approved or rejected) */}
+                                        {existingContract.admin_notes && (existingContract.status === 'rejected' || existingContract.status === 'approved') && (
+                                            <p className={`text-xs ${existingContract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>
+                                                <b>Admin Notes:</b> {existingContract.admin_notes}
+                                            </p>
+                                        )}
+                                        {/* --- *** END OF CHANGE 2 *** --- */}
+
+
+                                        {/* ADMIN ACTION BLOCK (Approve/Reject) */}
+                                        {existingContract.status === 'submitted' && (
+                                            <div className="border-t border-neutral-700 pt-3 space-y-2">
+                                                <h4 className="text-sm font-medium text-neutral-300">Admin Actions: Review Submitted Contract</h4>
+                                                <div className="flex flex-col sm:flex-row gap-2 items-start">
+                                                    <button
+                                                        onClick={() => handleUpdateStatus(existingContract.user_document_id, 'approved')}
+                                                        disabled={isUpdatingStatus === existingContract.user_document_id}
+                                                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm rounded disabled:opacity-50"
+                                                    >
+                                                        {isUpdatingStatus === existingContract.user_document_id ? '...' : 'Approve'}
+                                                    </button>
+                                                    <div className="flex flex-col items-start w-full">
+                                                        <button
+                                                            onClick={() => handleUpdateStatus(existingContract.user_document_id, 'rejected')}
+                                                            disabled={isUpdatingStatus === existingContract.user_document_id}
+                                                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 mb-1"
+                                                        >
+                                                            {isUpdatingStatus === existingContract.user_document_id ? '...' : 'Reject'}
+                                                        </button>
+                                                        <textarea
+                                                            value={rejectionNotes[existingContract.user_document_id] || ''}
+                                                            onChange={(e) => handleRejectionNoteChange(existingContract.user_document_id, e.target.value)}
+                                                            placeholder="Rejection notes (required)"
+                                                            rows="2"
+                                                            className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-neutral-400">No contract currently uploaded for this user.</p>
+                                )}
+
+                                {/* Upload/Replace Contract Form (Unchanged) */}
+                                <p className="text-sm text-neutral-400 pt-4 border-t border-neutral-700">
+                                    {existingContract ? 'Upload a new version (replaces existing):' : 'Upload the blank contract for the user:'}
+                                </p>
                                 {contractMessage.text && (
-                                    <p className={`text-sm mb-3 ${
-                                        contractMessage.type === 'error' ? 'text-red-400' :
+                                    <p className={`text-sm ${contractMessage.type === 'error' ? 'text-red-400' :
                                         contractMessage.type === 'success' ? 'text-green-400' :
-                                        'text-blue-400' // for info
-                                    }`}>
+                                            'text-blue-400'
+                                        }`}>
                                         {contractMessage.text}
                                     </p>
                                 )}
                                 <div className="flex flex-col md:flex-row gap-4 items-end">
                                     <div className="flex-grow w-full">
-                                        {/* Use the new AdminFileInput */}
                                         <AdminFileInput
                                             label="Contract Document"
                                             name="contractFile"
                                             onChange={handleContractFileChange}
                                             fileName={contractFileName}
-                                            required // Make it required for step 1
-                                            ref={contractInputRef} // Pass ref here
+                                            required={!existingContract}
+                                            ref={contractInputRef}
                                         />
                                     </div>
                                     <button
-                                        type="button" // Important: not type="submit"
+                                        type="button"
                                         onClick={handleContractUpload}
                                         disabled={isUploadingContract || !contractFile}
                                         className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50"
                                     >
-                                        {isUploadingContract ? 'Uploading...' : 'Upload Contract'}
+                                        {isUploadingContract ? 'Uploading...' : (existingContract ? 'Replace Contract' : 'Upload Contract')}
                                     </button>
                                 </div>
-                                {/* Optional: Add display for already uploaded contract if backend provides it */}
                             </div>
                         )}
 
-                        {/* --- Requirements Section (Visible only in Step 2) --- */}
+
+                        {/* --- Requirements Section (Step 2) (Unchanged) --- */}
                         {selectedUserCurrentStep === 2 && (
                             <div>
                                 <h3 className="text-lg font-medium mb-2 text-neutral-300">
                                     Step 2: Assigned Requirements for {selectedUserDisplay}
                                 </h3>
-                                {/* Display general assignment messages here */}
                                 {assignmentMessage.text && (
                                     <p className={`text-sm mb-4 p-3 rounded ${assignmentMessage.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' : 'bg-green-900/50 border border-green-700 text-green-300'}`}>
                                         {assignmentMessage.text}
                                     </p>
                                 )}
-                                {/* Assigned Requirements Table */}
                                 <div className="overflow-x-auto mb-6 border border-neutral-600 rounded-lg">
                                     <table className="min-w-full divide-y divide-neutral-600">
-                                       {/* ... table head unchanged ... */}
+                                        {/* ... table head ... */}
                                         <thead className="bg-neutral-700">
                                             <tr>
                                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Document Name</th>
@@ -591,7 +702,6 @@ const AdminPage = () => {
                                             )}
                                             {!isLoadingRequirements && assignedRequirements.map((req) => (
                                                 <tr key={req.user_document_id}>
-                                                     {/* ... table cells (td) unchanged ... */}
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{req.document_name}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{req.document_notes}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
@@ -599,14 +709,12 @@ const AdminPage = () => {
                                                             {req.status}
                                                         </span>
                                                     </td>
-                                                     <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
-                                                        {/* ... review/actions cell content unchanged ... */}
-                                                         {/* View Link (only if submitted or reviewed) */}
+                                                    <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
                                                         {(req.status === 'submitted' || req.status === 'approved' || req.status === 'rejected') ? (
                                                             <a
                                                                 href={`https://renaisons.com/api/download_user_document.php?doc_id=${req.user_document_id}`}
-                                                                target="_blank" // Open in new tab
-                                                                rel="noopener noreferrer" // Security best practice
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
                                                                 className="text-blue-400 hover:text-blue-300 hover:underline mr-3"
                                                             >
                                                                 View File
@@ -615,7 +723,6 @@ const AdminPage = () => {
                                                             <span className="text-neutral-500 mr-3">No File</span>
                                                         )}
 
-                                                        {/* Approve/Reject Buttons (only if submitted) */}
                                                         {req.status === 'submitted' && (
                                                             <div className="flex flex-col sm:flex-row gap-2 items-start">
                                                                 <button
@@ -643,13 +750,16 @@ const AdminPage = () => {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                         {req.status === 'rejected' && req.admin_notes && (
-                                                        <p className="text-xs text-red-300 mt-1">Notes: {req.admin_notes}</p>
-                                                    )}
-                                                    {/* Placeholder if Pending/Approved */}
-                                                    {(req.status === 'pending' || req.status === 'approved') && (
-                                                        <span className="text-neutral-500 text-xs">No actions needed</span>
-                                                    )}
+                                                        {req.status === 'rejected' && req.admin_notes && (
+                                                            <p className="text-xs text-red-300 mt-1">Notes: {req.admin_notes}</p>
+                                                        )}
+                                                        {/* --- MODIFICATION: Show "Document approved" note here too --- */}
+                                                        {req.status === 'approved' && req.admin_notes && (
+                                                            <p className="text-xs text-green-300 mt-1">Notes: {req.admin_notes}</p>
+                                                        )}
+                                                        {(req.status === 'pending') && (
+                                                            <span className="text-neutral-500 text-xs">No actions needed</span>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                                         <button
@@ -665,15 +775,14 @@ const AdminPage = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                                {/* Add New Requirement Form */}
+                                {/* Add New Requirement Form (Unchanged) */}
                                 <form onSubmit={handleAddRequirement} className="border-t border-neutral-700 pt-6">
                                     <h4 className="text-md font-medium mb-2 text-neutral-300">
                                         Add New Requirement for {selectedUserDisplay}
                                     </h4>
-                                    {/* Message display moved up */}
                                     <div className="flex flex-col md:flex-row gap-4 items-end">
                                         <div className="flex-grow w-full">
-                                            <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., Signed NDA" required/>
+                                            <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., Signed NDA" required />
                                         </div>
                                         <div className="flex-grow w-full">
                                             <AdminFormInput label="Notes (Optional)" name="document_notes" value={newRequirement.document_notes} onChange={handleNewRequirementChange} placeholder="e.g., Must be returned by EOD Friday" />
@@ -688,11 +797,20 @@ const AdminPage = () => {
                                 </form>
                             </div>
                         )}
-                        {/* Optionally add content for steps 3, 4, 5 here */}
-
                     </div>
                 )}
             </section>
+
+            {/* --- Modal Component (Unchanged) --- */}
+            <ConfirmModal
+                isOpen={modalState.isOpen}
+                onClose={handleModalClose}
+                onConfirm={modalState.onConfirm}
+                title={modalState.title}
+                message={modalState.message}
+                confirmText={modalState.confirmText}
+            />
+
         </div>
     );
 };

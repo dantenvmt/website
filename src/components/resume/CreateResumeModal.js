@@ -17,16 +17,22 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
 
     const handleManualBuild = async (e) => {
         e.preventDefault();
-        if (!resumeName) {
+
+        // --- ADD THIS CHECK ---
+        const trimmedName = resumeName.trim(); // Trim whitespace first
+        if (!trimmedName) { // Check if the trimmed name is empty
             alert('Please enter a resume name.');
-            return;
+            return; // Stop the function
         }
+        // --- END OF CHECK ---
 
         try {
             const response = await fetch('https://renaisons.com/api/create_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resumeName: resumeName }),
+                // Send the trimmed name
+                body: JSON.stringify({ resumeName: trimmedName }),
+                credentials: 'include' // Make sure this is still here
             });
 
             const result = await response.json();
@@ -34,7 +40,8 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             if (result.status === 'success' && result.resume_id) {
                 resetResume();
                 const targetUrl = `/resume/${result.resume_id}/contact`;
-                navigate(targetUrl, { state: { resumeName: resumeName } });
+                // Pass the trimmed name in the state
+                navigate(targetUrl, { state: { resumeName: trimmedName } });
                 handleClose();
             } else {
                 alert('Error from server: ' + (result.message || 'Unknown error.'));
@@ -47,11 +54,11 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
 
     const handleAiBuild = async (e) => {
         e.preventDefault();
-        if (!resumeName) {
+        const trimmedName = resumeName.trim(); // Trim whitespace first
+        if (!trimmedName) { // Check if the trimmed name is empty
             alert('Please enter a resume name.');
-            return;
+            return; // Stop the function
         }
-        // Even for AI build, we first create the resume to get an ID
         try {
             const response = await fetch('https://renaisons.com/api/create_resume.php', {
                 method: 'POST',

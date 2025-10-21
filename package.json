@@ -5,6 +5,7 @@
   "proxy": "https://renaisons.com",
   "homepage": "https://renaisons.com",
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/cli": "^4.1.11",
     "@tailwindcss/postcss": "^4.1.11",

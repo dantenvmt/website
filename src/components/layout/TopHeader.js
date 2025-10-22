@@ -1,3 +1,4 @@
+// src/components/layout/TopHeader.js
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext'; // Verify path
@@ -16,15 +17,24 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
     const handleLoginSuccess = (userData) => { // Receives user data
         setShowLogin(false); // Close modal immediately
         setToast({ show: true, message: 'Login successful!' });
-
+        setTimeout(() => {
+            window.location.reload();
+        }, 100);
         // --- Add a small delay before navigating ---
         // This gives AuthContext a moment to update its state
         setTimeout(() => {
-            console.log("Navigating after delay..."); // Debug log
-            window.location.href = '/';
-            // We hope the updated 'user' state is now available when UserStatusPage mounts
-        }, 100); // 100ms delay - adjust if needed, but keep it short
 
+            // --- MODIFIED: Navigate based on role ---
+            if (userData.role === 'admin') {
+                navigate('/admin');
+            } else if (userData.role === 'user') {
+                // Check if they have a resume or status to go to, otherwise default
+                navigate('/my-status'); // Default to status page for user
+            } else {
+                navigate('/'); // Fallback to home
+            }
+            // window.location.href = '/'; // Avoid full page reload
+        }, 100); // 100ms delay
     };
 
     const handleLogout = () => {
@@ -33,7 +43,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
         navigate('/'); // Redirect to home page after logout
     };
 
-    // Render function for Login/Logout button area
+    // --- MODIFIED: This function now includes role-based links ---
     const renderAuthSection = () => {
         // While checking initial auth status, show nothing or a placeholder
         if (loading) {
@@ -44,17 +54,42 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
         if (user) {
             return (
                 <>
-                    {/* Optional: Display user email or name */}
+                    {/* Display user email or name */}
                     <span className="text-sm text-neutral-400 hidden md:inline" title={user.role}>
                         {user.email}
                     </span>
+
+                    {/* --- NEW: Conditional Link for Admin --- */}
+                    {user.role.toLowerCase() === 'admin' && ( // <-- CHANGED
+                        <Link
+                            to="/admin"
+                            className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"
+                            title="Admin Dashboard"
+                        >
+                            Admin
+                        </Link>
+                    )}
+
+                    {/* --- NEW: Conditional Link for User --- */}
+                    {user.role.toLowerCase() === 'user' && ( // <-- CHANGED
+                        <Link
+                            to="/my-status"
+                            className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"
+                            title="My Status"
+                        >
+                            My Status
+                        </Link>
+                    )}
+
+                    {/* --- MODIFIED: Renamed "Settings" to "Change Password" --- */}
                     <Link
-                        to="/settings/change-password"
+                        to="/settings/change-password" // Path from App.js is correct
                         className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"
                         title="Change Password"
                     >
-                         Settings
+                        Change Password
                     </Link>
+
                     <button
                         onClick={handleLogout}
                         className="px-4 py-2 text-sm font-medium rounded-md hover:bg-neutral-800 transition-colors"
@@ -75,7 +110,6 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
             </button>
         );
     };
-
     return (
         <>
             <header className="flex-shrink-0 h-16 flex items-center justify-between md:justify-end px-6 border-b border-neutral-800">

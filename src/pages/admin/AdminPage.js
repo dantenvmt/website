@@ -2,14 +2,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
-// --- Define Updated Onboarding Steps ---
+// --- Define Updated Onboarding Steps (Unchanged) ---
 const STEP_DEFINITIONS = {
     0: 'Step 0: New User',
     1: 'Step 1: Contract Upload',
     2: 'Step 2: Gathering Documents',
     3: 'Step 3: Documents Under Review',
-    4: 'Step 4: Change name later',
-    5: 'Step 5: Change name later',
+    4: 'Step 4: Final Draft Review',
+    5: 'Step 5: Documents Submission',
 };
 const MAX_STEP = Math.max(...Object.keys(STEP_DEFINITIONS).map(Number));
 
@@ -65,7 +65,7 @@ const AdminPage = () => {
     const [selectedUserCurrentStep, setSelectedUserCurrentStep] = useState(null);
     const [assignedRequirements, setAssignedRequirements] = useState([]);
     const [newRequirement, setNewRequirement] = useState({ document_name: '', document_notes: '' });
-    const [assignmentMessage, setAssignmentMessage] = useState({ type: '', text: '' });
+    const [assignmentMessage, setAssignmentMessage] = useState({ type: '', text: '' }); // For Step 2 messages
     const [stepMessage, setStepMessage] = useState({ type: '', text: '' });
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
@@ -75,7 +75,7 @@ const AdminPage = () => {
     const [contractFile, setContractFile] = useState(null);
     const [contractFileName, setContractFileName] = useState('');
     const [isUploadingContract, setIsUploadingContract] = useState(false);
-    const [contractMessage, setContractMessage] = useState({ type: '', text: '' });
+    const [contractMessage, setContractMessage] = useState({ type: '', text: '' }); // For Step 1 messages
     const contractInputRef = useRef(null);
     const [modalState, setModalState] = useState({
         isOpen: false,
@@ -84,10 +84,11 @@ const AdminPage = () => {
         onConfirm: () => { },
         confirmText: 'Confirm'
     });
+    const [newContractName, setNewContractName] = useState('');
     // --- End of State ---
 
     // --- Fetching Functions (Unchanged) ---
-    const fetchUsers = useCallback(async () => {
+    const fetchUsers = useCallback(async () => { /* ... */
         setIsLoadingUsers(true);
         try {
             const response = await fetch('https://renaisons.com/api/get_users.php', {
@@ -97,27 +98,28 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setUsersList(result.users);
             } else {
-                setAssignmentMessage({ type: 'error', text: `Failed to load users: ${result.message}` });
+                // Use a general message area or handle differently
+                console.error(`Failed to load users: ${result.message}`);
+                // setAssignmentMessage({ type: 'error', text: `Failed to load users: ${result.message}` });
             }
         } catch (error) {
             console.error("Error fetching users:", error);
-            setAssignmentMessage({ type: 'error', text: 'Failed to load users.' });
+            // setAssignmentMessage({ type: 'error', text: 'Failed to load users.' });
         } finally {
             setIsLoadingUsers(false);
         }
     }, []);
+    useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-    useEffect(() => {
-        fetchUsers();
-    }, [fetchUsers]);
-
-    const fetchUserRequirements = useCallback(async () => {
+    const fetchUserRequirements = useCallback(async () => { /* ... */
         if (!selectedUserId) {
             setAssignedRequirements([]);
             return;
         }
         setIsLoadingRequirements(true);
+        // Clear both message areas when fetching requirements
         setAssignmentMessage({ type: '', text: '' });
+        setContractMessage({ type: '', text: '' });
         try {
             const response = await fetch(`https://renaisons.com/api/get_user_requirements.php?user_id=${selectedUserId}`, {
                 credentials: 'include'
@@ -126,20 +128,19 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setAssignedRequirements(result.requirements);
             } else {
-                setAssignmentMessage({ type: 'error', text: `Failed to load requirements: ${result.message}` });
+                // Use a relevant message area or console log
+                console.error(`Failed to load requirements: ${result.message}`);
+                // setAssignmentMessage({ type: 'error', text: `Failed to load requirements: ${result.message}` });
                 setAssignedRequirements([]);
             }
         } catch (error) {
             console.error("Error fetching user requirements:", error);
-            setAssignmentMessage({ type: 'error', text: 'An error occurred while fetching requirements.' });
+            // setAssignmentMessage({ type: 'error', text: 'An error occurred while fetching requirements.' });
         } finally {
             setIsLoadingRequirements(false);
         }
     }, [selectedUserId]);
-
-    useEffect(() => {
-        fetchUserRequirements();
-    }, [fetchUserRequirements]);
+    useEffect(() => { fetchUserRequirements(); }, [fetchUserRequirements]);
     // --- End of Fetching Functions ---
 
     // --- Handlers for Create User (Unchanged) ---
@@ -180,12 +181,11 @@ const AdminPage = () => {
         setModalState({ isOpen: false });
     };
 
-    // --- Handlers for Managing Requirements ---
+    // --- Handlers for Managing Requirements (Apply to Both Step 1 Contracts & Step 2 Docs) ---
     const handleNewRequirementChange = (e) => {/* ... */
         const { name, value } = e.target;
         setNewRequirement(prev => ({ ...prev, [name]: value }));
     };
-
     const handleAddRequirement = async (e) => {/* ... */
         e.preventDefault();
         if (!newRequirement.document_name.trim()) {
@@ -215,18 +215,20 @@ const AdminPage = () => {
 
     // Modal Opener (Unchanged)
     const handleRemoveRequirement = (userDocumentId) => {
+        const req = assignedRequirements.find(r => r.user_document_id === userDocumentId);
         setModalState({
             isOpen: true,
-            title: 'Confirm Removal',
-            message: 'Are you sure you want to remove this requirement for this user? This action cannot be undone.',
+            title: `Confirm Removal`,
+            message: `Are you sure you want to remove "${req?.document_name || 'this requirement'}" for this user? This action cannot be undone.`,
             confirmText: 'Remove',
             onConfirm: () => performRemoveRequirement(userDocumentId)
         });
     };
-
     // Delete Logic (Unchanged)
     const performRemoveRequirement = async (userDocumentId) => {
         handleModalClose();
+        // Use the correct message area based on the current step
+        const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
         try {
             const response = await fetch('https://renaisons.com/api/remove_requirement.php', {
                 method: 'POST',
@@ -236,45 +238,36 @@ const AdminPage = () => {
             });
             const result = await response.json();
             if (response.ok && result.status === 'success') {
-                setAssignmentMessage({ type: 'success', text: 'Requirement removed.' });
+                setMessage({ type: 'success', text: 'Requirement removed.' });
                 fetchUserRequirements();
             } else {
-                setAssignmentMessage({ type: 'error', text: `Failed to remove: ${result.message}` });
+                setMessage({ type: 'error', text: `Failed to remove: ${result.message}` });
             }
         } catch (error) {
             console.error("Error removing requirement:", error);
-            setAssignmentMessage({ type: 'error', text: 'An error occurred while removing the requirement.' });
+            setMessage({ type: 'error', text: 'An error occurred while removing the requirement.' });
         }
     };
 
-
-    // --- *** CHANGE 1: Modify handleUpdateStatus *** ---
-    // This function is for Approve/Reject buttons
+    // Approve/Reject Logic (Unchanged)
     const handleUpdateStatus = async (userDocumentId, newStatus) => {
-
-        // --- MODIFIED LOGIC ---
         let notes = null;
         if (newStatus === 'rejected') {
             notes = rejectionNotes[userDocumentId] || '';
         } else if (newStatus === 'approved') {
-            // Check if the document being updated is the contract
-            const contract = assignedRequirements.find(r => r.document_name === 'Contract Agreement');
-            if (contract && contract.user_document_id === userDocumentId) {
-                notes = 'Contract approved'; // User's requested note
-            } else {
-                notes = 'Document approved'; // Generic note for other docs
-            }
+            const req = assignedRequirements.find(r => r.user_document_id === userDocumentId);
+            notes = `${req?.document_name || 'Document'} approved`; // Generic approval note
         }
-        // --- END OF MODIFICATION ---
+
+        const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
 
         if (newStatus === 'rejected' && !notes.trim()) {
-            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
             setMessage({ type: 'error', text: 'Please enter rejection notes.' });
             return;
         }
 
         setIsUpdatingStatus(userDocumentId);
-        setAssignmentMessage({ type: '', text: '' });
+        setAssignmentMessage({ type: '', text: '' }); // Clear both
         setContractMessage({ type: '', text: '' });
 
         try {
@@ -284,15 +277,14 @@ const AdminPage = () => {
                 body: JSON.stringify({
                     user_document_id: userDocumentId,
                     new_status: newStatus,
-                    admin_notes: notes // This now sends the "Contract approved" note
+                    admin_notes: notes
                 }),
                 credentials: 'include'
             });
             const result = await response.json();
-            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
 
             if (response.ok && result.status === 'success') {
-                setMessage({ type: 'success', text: `Document status updated to ${newStatus}.` });
+                setMessage({ type: 'success', text: `Status updated to ${newStatus}.` });
                 setRejectionNotes(prev => {
                     const newState = { ...prev };
                     delete newState[userDocumentId];
@@ -304,51 +296,60 @@ const AdminPage = () => {
             }
         } catch (error) {
             console.error("Error updating status:", error);
-            const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
             setMessage({ type: 'error', text: 'An error occurred while updating status.' });
         } finally {
             setIsUpdatingStatus(null);
         }
     };
-    // --- *** END OF CHANGE 1 *** ---
-
     const handleRejectionNoteChange = (userDocumentId, value) => {
         setRejectionNotes(prev => ({ ...prev, [userDocumentId]: value }));
     };
-
+    // --- End of Requirement Handlers ---
 
     // --- Handler for User Selection (Unchanged) ---
     const handleUserSelectionChange = (e) => {
         const userId = e.target.value;
         setSelectedUserId(userId);
+        // Clear all messages and inputs
         setStepMessage({ type: '', text: '' });
         setContractMessage({ type: '', text: '' });
+        setAssignmentMessage({ type: '', text: '' });
         setContractFile(null);
         setContractFileName('');
-        setAssignmentMessage({ type: '', text: '' });
         setRejectionNotes({});
+        setNewRequirement({ document_name: '', document_notes: '' });
 
         if (userId) {
-            const user = usersList.find(u => u.user_id === userId);
+            // Convert userId from string (select value) to number for comparison if needed
+            const user = usersList.find(u => u.user_id === userId); // Using strict equality now
             if (user) {
                 setSelectedUserCurrentStep(user.onboarding_step);
+            } else {
+                setSelectedUserCurrentStep(null); // User not found? Reset step.
             }
         } else {
             setSelectedUserCurrentStep(null);
         }
     };
 
-    // --- Handler for Step Update (Unchanged, already has contract check) ---
+
+    // --- *** CHANGE 1: Update "Move to Next Step" Logic *** ---
     const handleMoveToNextStep = async () => {
         if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
 
+        // --- MODIFIED Check ---
         if (selectedUserCurrentStep === 1) {
-            const contract = assignedRequirements.find(r => r.document_name === 'Contract Agreement');
-            if (!contract || contract.status !== 'approved') {
-                setStepMessage({ type: 'error', text: 'You must approve the user\'s submitted contract before moving to Step 2.' });
+            // Find all contracts for the user using the new type
+            const contracts = assignedRequirements.filter(r => r.document_type === 'contract'); // Filter by type
+            // Check if every contract is approved. Allow moving if there are no contracts.
+            const allContractsApproved = contracts.length === 0 || contracts.every(c => c.status === 'approved');
+
+            if (!allContractsApproved) {
+                setStepMessage({ type: 'error', text: 'All submitted contracts must be approved before moving to Step 2.' });
                 return;
             }
         }
+        // --- End of modification ---
 
         const nextStep = selectedUserCurrentStep + 1;
         setIsUpdatingStep(true);
@@ -365,7 +366,7 @@ const AdminPage = () => {
                 setStepMessage({ type: 'success', text: 'User moved to next step!' });
                 setSelectedUserCurrentStep(nextStep);
                 setUsersList(prevList => prevList.map(u =>
-                    u.user_id === selectedUserId ? { ...u, onboarding_step: nextStep } : u
+                    u.user_id === selectedUserId ? { ...u, onboarding_step: nextStep } : u // Using strict equality now
                 ));
             } else {
                 setStepMessage({ type: 'error', text: `Failed to update step: ${result.message}` });
@@ -377,8 +378,10 @@ const AdminPage = () => {
             setIsUpdatingStep(false);
         }
     };
+    // --- *** END OF CHANGE 1 *** ---
 
     // --- Handlers for Contract Upload (Unchanged) ---
+    // This section is now just for uploading *new* blank contracts
     const handleContractFileChange = (e) => {/* ... */
         const file = e.target.files[0];
         setContractMessage({ type: '', text: '' });
@@ -400,9 +403,10 @@ const AdminPage = () => {
             setContractFileName('');
         }
     };
-    const handleContractUpload = async () => {/* ... */
-        if (!selectedUserId || !contractFile) {
-            setContractMessage({ type: 'error', text: 'Please select a user and a file.' });
+    const handleContractUpload = async () => {
+        // Add validation for the new name field
+        if (!selectedUserId || !contractFile || !newContractName.trim()) {
+            setContractMessage({ type: 'error', text: 'Please select a user, choose a file, and enter a contract name.' });
             return;
         }
         if (isUploadingContract) return;
@@ -413,6 +417,8 @@ const AdminPage = () => {
         const formData = new FormData();
         formData.append('userId', selectedUserId);
         formData.append('contractFile', contractFile);
+        // Append the new contract name
+        formData.append('document_name', newContractName.trim());
 
         try {
             const response = await fetch('https://renaisons.com/api/upload_admin_contract.php', {
@@ -424,11 +430,13 @@ const AdminPage = () => {
             const result = await response.json();
 
             if (response.ok && result.status === 'success') {
-                setContractMessage({ type: 'success', text: 'Contract uploaded successfully!' });
+                setContractMessage({ type: 'success', text: `Contract "${newContractName.trim()}" uploaded successfully!` });
+                // Reset fields
                 setContractFile(null);
                 setContractFileName('');
+                setNewContractName(''); // Clear the name input
                 if (contractInputRef.current) contractInputRef.current.value = '';
-                fetchUserRequirements();
+                fetchUserRequirements(); // Refresh requirements list
             } else {
                 setContractMessage({ type: 'error', text: `Upload failed: ${result.message || 'Server error'}` });
             }
@@ -439,14 +447,15 @@ const AdminPage = () => {
             setIsUploadingContract(false);
         }
     };
+    // --- End of Contract Upload Handlers ---
 
-    // --- Helper variables (Unchanged) ---
+    // --- Helper variables ---
     const currentStepName = STEP_DEFINITIONS[selectedUserCurrentStep] || 'Unknown Step';
     const nextStepName = STEP_DEFINITIONS[selectedUserCurrentStep + 1];
     const atMaxStep = selectedUserCurrentStep >= MAX_STEP;
-    const getSelectedUserDisplay = () => {
+    const getSelectedUserDisplay = () => { /* ... (unchanged) */
         if (!selectedUserId) return '';
-        const user = usersList.find(u => u.user_id === selectedUserId);
+        const user = usersList.find(u => u.user_id === selectedUserId); // Loose equality ok
         if (!user) return '';
         if (user.first_name && user.last_name) {
             return `${user.first_name} ${user.last_name} (${user.email})`;
@@ -455,10 +464,11 @@ const AdminPage = () => {
     };
     const selectedUserDisplay = getSelectedUserDisplay();
 
-    const existingContract = assignedRequirements.find(
-        req => req.document_name === 'Contract Agreement'
+    // --- *** CHANGE 2: Filter contracts for Step 1 *** ---
+    const step1Contracts = assignedRequirements.filter(
+        req => req.document_type === 'contract' // Filter by type
     );
-    // --- End of Helper Variables ---
+    // --- *** END OF CHANGE 2 *** ---
 
     // --- Render Logic ---
     return (
@@ -467,9 +477,9 @@ const AdminPage = () => {
 
             {/* --- Section: Create User (Unchanged) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
+                {/* ... Create User form ... */}
                 <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
                 <form onSubmit={handleCreateUserSubmit} className="space-y-4 max-w-lg">
-                    {/* ... form inputs ... */}
                     <AdminFormInput
                         label="First Name"
                         name="firstName"
@@ -500,12 +510,13 @@ const AdminPage = () => {
                 </form>
             </section>
 
-            {/* --- Section: Manage User (Unchanged) --- */}
+            {/* --- Section: Manage User (Unchanged structure) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
                 <h2 className="text-2xl font-semibold mb-4">Manage User Status & Requirements</h2>
 
                 {/* User Selection Dropdown (Unchanged) */}
                 <div className="mb-6">
+                    {/* ... Select dropdown ... */}
                     <label htmlFor="userSelect" className="block text-sm font-medium text-neutral-300 mb-1">Select User to Manage</label>
                     <select
                         id="userSelect"
@@ -528,6 +539,7 @@ const AdminPage = () => {
                     <div className="space-y-8">
                         {/* User Status / Step Management (Unchanged) */}
                         <div className="border border-neutral-700 rounded-lg p-4">
+                            {/* ... Step display and button ... */}
                             <h3 className="text-lg font-medium mb-3 text-neutral-300">
                                 User Status: <span className="font-semibold text-white">{selectedUserDisplay}</span>
                             </h3>
@@ -550,129 +562,172 @@ const AdminPage = () => {
                             </button>
                         </div>
 
-                        {/* --- Contract Upload Section (Visible only in Step 1) --- */}
+
+                        {/* --- *** CHANGE 3: Update Step 1 Section UI *** --- */}
                         {selectedUserCurrentStep === 1 && (
-                            <div className="border border-neutral-700 rounded-lg p-4 space-y-4">
-                                <h3 className="text-lg font-medium text-neutral-300">
-                                    Step 1: Contract for {selectedUserDisplay}
-                                </h3>
+                            <div className="border border-neutral-700 rounded-lg p-4 space-y-6">
+                                {/* Section Title */}
+                                <div>
+                                    <h3 className="text-lg font-medium text-neutral-300">
+                                        Step 1: Contracts for {selectedUserDisplay}
+                                    </h3>
+                                    {/* Display Step 1 specific messages */}
+                                    {contractMessage.text && (
+                                        <p className={`text-sm mt-2 p-2 rounded ${contractMessage.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' :
+                                            contractMessage.type === 'success' ? 'bg-green-900/50 border border-green-700 text-green-300' :
+                                                'bg-blue-900/50 border border-blue-700 text-blue-300'
+                                            }`}>
+                                            {contractMessage.text}
+                                        </p>
+                                    )}
+                                </div>
 
-                                {/* Display Existing Contract Info */}
-                                {isLoadingRequirements ? (
-                                    <p className="text-sm text-neutral-400">Loading contract info...</p>
-                                ) : existingContract ? (
-                                    <div className="bg-neutral-900/50 p-3 border border-neutral-600 rounded space-y-3">
-                                        {/* Status and View Link Row */}
-                                        <div className="flex justify-between items-center">
-                                            <p className="text-sm text-neutral-300">
-                                                Current Contract Status:
-                                                <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${existingContract.status === 'approved' ? 'bg-green-800 text-green-100' :
-                                                    existingContract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' :
-                                                        existingContract.status === 'rejected' ? 'bg-red-800 text-red-100' :
-                                                            'bg-gray-700 text-gray-100' // pending
-                                                    }`}>
-                                                    {existingContract.status}
-                                                </span>
-                                            </p>
-                                            {(existingContract.status === 'submitted' || existingContract.status === 'approved' || existingContract.status === 'rejected') ? (
-                                                <a
-                                                    href={`https://renaisons.com/api/download_user_document.php?doc_id=${existingContract.user_document_id}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
-                                                >
-                                                    View File
-                                                </a>
-                                            ) : (
-                                                <span className="text-neutral-500 text-sm">No user file</span>
+                                {/* Contract List Table (Similar to Step 2) */}
+                                <div className="overflow-x-auto border border-neutral-600 rounded-lg">
+                                    <table className="min-w-full divide-y divide-neutral-600">
+                                        <thead className="bg-neutral-700">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Contract Name</th>
+                                                {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Notes</th> */}
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Review/Actions</th>
+                                                <th scope="col" className="relative px-6 py-3 w-12"><span className="sr-only">Actions</span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-neutral-800 divide-y divide-neutral-700">
+                                            {isLoadingRequirements && (
+                                                <tr><td colSpan="4" className="text-center p-4 text-neutral-400">Loading contracts...</td></tr>
                                             )}
-                                        </div>
-
-                                        {/* --- *** CHANGE 2: Modify Admin Notes Display *** --- */}
-                                        {/* Show Admin Notes if they exist (for approved or rejected) */}
-                                        {existingContract.admin_notes && (existingContract.status === 'rejected' || existingContract.status === 'approved') && (
-                                            <p className={`text-xs ${existingContract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>
-                                                <b>Admin Notes:</b> {existingContract.admin_notes}
-                                            </p>
-                                        )}
-                                        {/* --- *** END OF CHANGE 2 *** --- */}
-
-
-                                        {/* ADMIN ACTION BLOCK (Approve/Reject) */}
-                                        {existingContract.status === 'submitted' && (
-                                            <div className="border-t border-neutral-700 pt-3 space-y-2">
-                                                <h4 className="text-sm font-medium text-neutral-300">Admin Actions: Review Submitted Contract</h4>
-                                                <div className="flex flex-col sm:flex-row gap-2 items-start">
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(existingContract.user_document_id, 'approved')}
-                                                        disabled={isUpdatingStatus === existingContract.user_document_id}
-                                                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm rounded disabled:opacity-50"
-                                                    >
-                                                        {isUpdatingStatus === existingContract.user_document_id ? '...' : 'Approve'}
-                                                    </button>
-                                                    <div className="flex flex-col items-start w-full">
+                                            {!isLoadingRequirements && step1Contracts.length === 0 && (
+                                                <tr><td colSpan="4" className="text-center p-4 text-neutral-400">No contracts uploaded for this user yet.</td></tr>
+                                            )}
+                                            {/* Map over the filtered contracts */}
+                                            {!isLoadingRequirements && step1Contracts.map((contract) => (
+                                                <tr key={contract.user_document_id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{contract.document_name}</td>
+                                                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{contract.document_notes}</td> */}
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${contract.status === 'approved' ? 'bg-green-800 text-green-100' :
+                                                            contract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' :
+                                                                contract.status === 'rejected' ? 'bg-red-800 text-red-100' :
+                                                                    'bg-gray-700 text-gray-100' // pending
+                                                            }`}>
+                                                            {contract.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
+                                                        {/* View Link */}
+                                                        {(contract.status === 'submitted' || contract.status === 'approved' || contract.status === 'rejected') ? (
+                                                            <a
+                                                                href={`https://renaisons.com/api/download_user_document.php?doc_id=${contract.user_document_id}`}
+                                                                target="_blank" rel="noopener noreferrer"
+                                                                className="text-blue-400 hover:text-blue-300 hover:underline mr-3"
+                                                            >
+                                                                View File
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-neutral-500 mr-3">No User File</span>
+                                                        )}
+                                                        {/* Approve/Reject Buttons */}
+                                                        {contract.status === 'submitted' && (
+                                                            <div className="flex flex-col sm:flex-row gap-2 items-start">
+                                                                <button
+                                                                    onClick={() => handleUpdateStatus(contract.user_document_id, 'approved')}
+                                                                    disabled={isUpdatingStatus === contract.user_document_id}
+                                                                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50"
+                                                                >
+                                                                    {isUpdatingStatus === contract.user_document_id ? '...' : 'Approve'}
+                                                                </button>
+                                                                <div className="flex flex-col items-start w-full">
+                                                                    <button
+                                                                        onClick={() => handleUpdateStatus(contract.user_document_id, 'rejected')}
+                                                                        disabled={isUpdatingStatus === contract.user_document_id}
+                                                                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50 mb-1"
+                                                                    >
+                                                                        {isUpdatingStatus === contract.user_document_id ? '...' : 'Reject'}
+                                                                    </button>
+                                                                    <textarea
+                                                                        value={rejectionNotes[contract.user_document_id] || ''}
+                                                                        onChange={(e) => handleRejectionNoteChange(contract.user_document_id, e.target.value)}
+                                                                        placeholder="Rejection notes (required)" rows="2"
+                                                                        className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {/* Display Admin Notes */}
+                                                        {contract.admin_notes && (contract.status === 'rejected' || contract.status === 'approved') && (
+                                                            <p className={`text-xs mt-1 ${contract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>
+                                                                Notes: {contract.admin_notes}
+                                                            </p>
+                                                        )}
+                                                        {(contract.status === 'pending') && (
+                                                            <span className="text-neutral-500 text-xs">No actions needed</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                        {/* Use the same remove handler */}
                                                         <button
-                                                            onClick={() => handleUpdateStatus(existingContract.user_document_id, 'rejected')}
-                                                            disabled={isUpdatingStatus === existingContract.user_document_id}
-                                                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 mb-1"
+                                                            onClick={() => handleRemoveRequirement(contract.user_document_id)}
+                                                            className="text-red-400 hover:text-red-600"
+                                                            title="Remove Contract"
                                                         >
-                                                            {isUpdatingStatus === existingContract.user_document_id ? '...' : 'Reject'}
+                                                            Remove
                                                         </button>
-                                                        <textarea
-                                                            value={rejectionNotes[existingContract.user_document_id] || ''}
-                                                            onChange={(e) => handleRejectionNoteChange(existingContract.user_document_id, e.target.value)}
-                                                            placeholder="Rejection notes (required)"
-                                                            rows="2"
-                                                            className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="border-t border-neutral-700 pt-6">
+                                    <h4 className="text-md font-medium mb-2 text-neutral-300">
+                                        Upload New Blank Document for User (Step 1)
+                                    </h4>
+                                    {/* Contract message display is handled above */}
+                                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
+                                        {/* NEW Contract Name Input */}
+                                        <div className="flex-grow w-full">
+                                            <AdminFormInput
+                                                label="Document Name"
+                                                name="newContractName"
+                                                value={newContractName}
+                                                onChange={(e) => setNewContractName(e.target.value)}
+                                                placeholder="e.g., Master Service Agreement"
+                                                required
+                                            />
+                                        </div>
+                                        {/* File Input */}
+                                        <div className="flex-grow w-full">
+                                            <AdminFileInput
+                                                label="Document File"
+                                                name="contractFile"
+                                                onChange={handleContractFileChange}
+                                                fileName={contractFileName}
+                                                required // Always require a file for upload
+                                                ref={contractInputRef}
+                                            />
+                                        </div>
+                                        {/* Upload Button */}
+                                        <button
+                                            type="button"
+                                            onClick={handleContractUpload}
+                                            disabled={isUploadingContract || !contractFile || !newContractName.trim()} // Also disable if name is empty
+                                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50 flex-shrink-0"
+                                        >
+                                            {isUploadingContract ? 'Uploading...' : 'Upload Document'}
+                                        </button>
                                     </div>
-                                ) : (
-                                    <p className="text-sm text-neutral-400">No contract currently uploaded for this user.</p>
-                                )}
-
-                                {/* Upload/Replace Contract Form (Unchanged) */}
-                                <p className="text-sm text-neutral-400 pt-4 border-t border-neutral-700">
-                                    {existingContract ? 'Upload a new version (replaces existing):' : 'Upload the blank contract for the user:'}
-                                </p>
-                                {contractMessage.text && (
-                                    <p className={`text-sm ${contractMessage.type === 'error' ? 'text-red-400' :
-                                        contractMessage.type === 'success' ? 'text-green-400' :
-                                            'text-blue-400'
-                                        }`}>
-                                        {contractMessage.text}
-                                    </p>
-                                )}
-                                <div className="flex flex-col md:flex-row gap-4 items-end">
-                                    <div className="flex-grow w-full">
-                                        <AdminFileInput
-                                            label="Contract Document"
-                                            name="contractFile"
-                                            onChange={handleContractFileChange}
-                                            fileName={contractFileName}
-                                            required={!existingContract}
-                                            ref={contractInputRef}
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleContractUpload}
-                                        disabled={isUploadingContract || !contractFile}
-                                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50"
-                                    >
-                                        {isUploadingContract ? 'Uploading...' : (existingContract ? 'Replace Contract' : 'Upload Contract')}
-                                    </button>
                                 </div>
                             </div>
                         )}
+                        {/* --- *** END OF CHANGE 3 *** --- */}
 
 
                         {/* --- Requirements Section (Step 2) (Unchanged) --- */}
                         {selectedUserCurrentStep === 2 && (
                             <div>
+                                {/* ... Step 2 content remains exactly the same ... */}
                                 <h3 className="text-lg font-medium mb-2 text-neutral-300">
                                     Step 2: Assigned Requirements for {selectedUserDisplay}
                                 </h3>
@@ -683,7 +738,6 @@ const AdminPage = () => {
                                 )}
                                 <div className="overflow-x-auto mb-6 border border-neutral-600 rounded-lg">
                                     <table className="min-w-full divide-y divide-neutral-600">
-                                        {/* ... table head ... */}
                                         <thead className="bg-neutral-700">
                                             <tr>
                                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Document Name</th>
@@ -705,7 +759,10 @@ const AdminPage = () => {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{req.document_name}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{req.document_notes}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${req.status === 'approved' ? 'bg-green-800 text-green-100' : req.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' : req.status === 'rejected' ? 'bg-red-800 text-red-100' : 'bg-gray-700 text-gray-100'}`}>
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${req.status === 'approved' ? 'bg-green-800 text-green-100' :
+                                                            req.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' :
+                                                                req.status === 'rejected' ? 'bg-red-800 text-red-100' :
+                                                                    'bg-gray-700 text-gray-100'}`}>
                                                             {req.status}
                                                         </span>
                                                     </td>
@@ -753,7 +810,6 @@ const AdminPage = () => {
                                                         {req.status === 'rejected' && req.admin_notes && (
                                                             <p className="text-xs text-red-300 mt-1">Notes: {req.admin_notes}</p>
                                                         )}
-                                                        {/* --- MODIFICATION: Show "Document approved" note here too --- */}
                                                         {req.status === 'approved' && req.admin_notes && (
                                                             <p className="text-xs text-green-300 mt-1">Notes: {req.admin_notes}</p>
                                                         )}
@@ -775,17 +831,17 @@ const AdminPage = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                                {/* Add New Requirement Form (Unchanged) */}
+                                {/* Add New Requirement Form */}
                                 <form onSubmit={handleAddRequirement} className="border-t border-neutral-700 pt-6">
                                     <h4 className="text-md font-medium mb-2 text-neutral-300">
                                         Add New Requirement for {selectedUserDisplay}
                                     </h4>
                                     <div className="flex flex-col md:flex-row gap-4 items-end">
                                         <div className="flex-grow w-full">
-                                            <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., Signed NDA" required />
+                                            <AdminFormInput label="Document Name" name="document_name" value={newRequirement.document_name} onChange={handleNewRequirementChange} placeholder="e.g., ID Card, Passport" required />
                                         </div>
                                         <div className="flex-grow w-full">
-                                            <AdminFormInput label="Notes (Optional)" name="document_notes" value={newRequirement.document_notes} onChange={handleNewRequirementChange} placeholder="e.g., Must be returned by EOD Friday" />
+                                            <AdminFormInput label="Notes (Optional)" name="document_notes" value={newRequirement.document_notes} onChange={handleNewRequirementChange} placeholder="e.g., Must be valid for 6 months" />
                                         </div>
                                         <button
                                             type="submit"
@@ -797,6 +853,18 @@ const AdminPage = () => {
                                 </form>
                             </div>
                         )}
+
+                        {/* --- Placeholder for Steps 3+ --- */}
+                        {selectedUserCurrentStep >= 3 && (
+                            <div className="border border-neutral-700 rounded-lg p-4">
+                                <h3 className="text-lg font-medium text-neutral-300">
+                                    {STEP_DEFINITIONS[selectedUserCurrentStep]} for {selectedUserDisplay}
+                                </h3>
+                                <p className="text-neutral-400">Content for this step goes here.</p>
+                                {/* You might want to display a summary of requirements or final status */}
+                            </div>
+                        )}
+
                     </div>
                 )}
             </section>

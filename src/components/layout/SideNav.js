@@ -39,42 +39,71 @@ const NavHeader = ({ isDesktopNavOpen, onToggle }) => (
         </button>
     </div>
 );
+const MainNavPanel = ({ handleNavClick, user, onOpenLoginModal }) => {
+    // --- ADDED: Define IDs of links moved to TopHeader ---
+    const movedLinkIds = ['admin', 'my-status'];
 
-const MainNavPanel = ({ handleNavClick, user, onOpenLoginModal }) => (
+    return (
+        <nav className="flex flex-col space-y-2">
+            {navLinks
+                // --- MODIFIED: Filter logic ---
+                .filter(link => {
+                    // 1. Exclude links that were moved
+                    if (movedLinkIds.includes(link.id)) {
+                        return false;
+                    }
+                    // 2. Keep public links
+                    if (!link.adminOnly && !link.userOnly) {
+                        return true;
+                    }
+                    // 3. Keep admin links ONLY if user is admin
+                    if (link.adminOnly && user?.role === 'admin') {
+                        return true;
+                    }
+                    // 4. Keep user links ONLY if user is logged in (role doesn't matter for userOnly links like Resume)
+                    // Updated this check to allow both 'user' and 'admin' roles for userOnly links
+                    if (link.userOnly && user) {
+                        return true;
+                    }
+                    // 5. Exclude anything else
+                    return false;
+                })
+                // --- END MODIFIED Filter ---
+                .map(link => {
+                    // Check if the link requires authentication (e.g., Resume link)
+                    // You might want a more explicit flag like `link.requiresAuth` in your mockData
+                    const requiresAuth = link.id === 'resume'; // Adjusted based on mockData
 
-    <nav className="flex flex-col space-y-2">
-        {navLinks
-            .filter(link => {
-                if (!link.adminOnly && !link.userOnly) return true;
-                if (link.adminOnly && user && user.role === 'admin') return true;
-                if (link.userOnly && user && user.role === 'user') return true;
-                return false;
-            })
-            .map(link => {
-                const isResumeOptimization = link.id === 'resume-optimization' || link.title.toLowerCase().includes('resume');
-                return (
-                    <Link
-                        key={link.id}
-                        to={link.id === 'home' ? '/' : `/${link.id}`}
-                        onClick={(e) => {
-                            if (isResumeOptimization && !user) {
-                                e.preventDefault();
-                                if (onOpenLoginModal) onOpenLoginModal();
-                                return;
-                            }
-                            handleNavClick(link);
-                        }}
-                        className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                    >
-                        <span>{link.title}</span>
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ArrowIcon />
-                        </span>
-                    </Link>
-                );
-            })}
-    </nav>
-);
+                    return (
+                        <Link
+                            key={link.id}
+                            to={link.id === 'home' ? '/' : `/${link.id}`}
+                            onClick={(e) => {
+                                // Prevent navigation and open login modal if auth is required but user is not logged in
+                                if (requiresAuth && !user) {
+                                    e.preventDefault();
+                                    if (onOpenLoginModal) onOpenLoginModal();
+                                    return;
+                                }
+                                // Proceed with normal navigation/sub-nav opening
+                                handleNavClick(link);
+                            }}
+                            className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                            title={link.title} // Added title attribute for accessibility
+                        >
+                            <span>{link.title}</span>
+                            {/* Show arrow only if the link has corresponding sub-navigation */}
+                            {subNavLinks[link.id] && (
+                                <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ArrowIcon />
+                                </span>
+                            )}
+                        </Link>
+                    );
+                })}
+        </nav>
+    );
+};
 
 // Secondary (sub-navigation) panel
 const SubNavPanel = ({ subNavData, onBack, handleSubNavClick, activeSubPage, parentId }) => (

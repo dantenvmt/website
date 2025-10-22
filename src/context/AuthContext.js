@@ -5,6 +5,7 @@ const AuthContext = createContext();
 
 // Provider component that wraps your app
 export const AuthProvider = ({ children }) => {
+
     // State to hold the user object (e.g., { email, role }) or null if not logged in
     const [user, setUser] = useState(null);
     // State to track if the initial authentication check is in progress
@@ -27,7 +28,6 @@ export const AuthProvider = ({ children }) => {
                 // If response status is not 2xx (e.g., 401 Unauthorized), assume not logged in
                 setUser(null);
                 // Optionally throw an error or log it
-                // console.log(`Auth check failed with status: ${response.status}`);
                 return; // Stop processing further for this case
             }
 
@@ -77,7 +77,6 @@ export const AuthProvider = ({ children }) => {
         }
         // Optionally add navigation after logout, e.g., using useNavigate() in the component calling logout
     };
-
     // Provide the user state, loading state, and auth functions to children
     return (
         <AuthContext.Provider value={{ user, login, logout, loading, checkAuthStatus }}>

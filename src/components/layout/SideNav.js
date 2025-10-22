@@ -65,13 +65,9 @@ const MainNavPanel = ({ handleNavClick, user, onOpenLoginModal }) => {
                     if (link.userOnly && user) {
                         return true;
                     }
-                    // 5. Exclude anything else
                     return false;
                 })
-                // --- END MODIFIED Filter ---
                 .map(link => {
-                    // Check if the link requires authentication (e.g., Resume link)
-                    // You might want a more explicit flag like `link.requiresAuth` in your mockData
                     const requiresAuth = link.id === 'resume'; // Adjusted based on mockData
 
                     return (
@@ -79,20 +75,17 @@ const MainNavPanel = ({ handleNavClick, user, onOpenLoginModal }) => {
                             key={link.id}
                             to={link.id === 'home' ? '/' : `/${link.id}`}
                             onClick={(e) => {
-                                // Prevent navigation and open login modal if auth is required but user is not logged in
                                 if (requiresAuth && !user) {
                                     e.preventDefault();
                                     if (onOpenLoginModal) onOpenLoginModal();
                                     return;
                                 }
-                                // Proceed with normal navigation/sub-nav opening
                                 handleNavClick(link);
                             }}
                             className="group flex items-center justify-between px-3 py-2 rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                            title={link.title} // Added title attribute for accessibility
+                            title={link.title}
                         >
                             <span>{link.title}</span>
-                            {/* Show arrow only if the link has corresponding sub-navigation */}
                             {subNavLinks[link.id] && (
                                 <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                                     <ArrowIcon />

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import Toast from '../../components/common/Toast'; // Toast component for messages
-import { CheckCircleIcon, ClockIcon, ExclamationTriangleIcon, ArrowDownCircleIcon } from '@heroicons/react/24/outline'; // Icons
+import { CheckCircleIcon, ClockIcon, ExclamationTriangleIcon, ArrowDownCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'; // Added InformationCircleIcon
 
 
 // --- Define Updated Onboarding Steps (Keep as is) ---
@@ -21,6 +21,7 @@ const UserStatusPage = () => {
     // --- MODIFIED: State now holds 'contracts' array ---
     const [statusInfo, setStatusInfo] = useState({
         step: 1,
+        step_note: null,
         requirements: [], // For Step 2+ docs
         contracts: [],    // For Step 1 contracts
     });
@@ -50,6 +51,7 @@ const UserStatusPage = () => {
                 // --- MODIFIED: Update state based on new API response ---
                 setStatusInfo({
                     step: result.onboarding_step || 1,
+                    step_note: result.step_note || null,
                     // Use the contracts array from API for step 1
                     contracts: result.contracts || [],
                     // Use the requirements array from API for step 2+
@@ -346,7 +348,16 @@ const UserStatusPage = () => {
 
             {/* Conditional Content */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700 max-w-4xl mx-auto">
-
+                {/* --- Display Step Note --- */}
+                {statusInfo.step_note && (
+                    <div className="mb-6 p-4 border border-blue-700 bg-blue-900/30 rounded-md flex items-start space-x-3">
+                        <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                        <div>
+                            <h3 className="text-sm font-medium text-blue-300">Note from Admin Regarding This Step:</h3>
+                            <p className="text-sm text-neutral-200 whitespace-pre-wrap">{statusInfo.step_note}</p>
+                        </div>
+                    </div>
+                )}
                 {/* --- Step 1: Contracts --- */}
                 {statusInfo.step === 1 && (
                     <>

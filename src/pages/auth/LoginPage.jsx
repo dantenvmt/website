@@ -18,7 +18,7 @@ export default function LoginPage() {
 
         try {
             // Call the actual PHP login script
-            const response = await fetch('https://renaisons.com/api/login.php', { // <-- CHANGE: Point to your PHP script URL
+            const response = await fetch('https://renaisons.com/api/login.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

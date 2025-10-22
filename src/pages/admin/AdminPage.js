@@ -57,6 +57,7 @@ const AdminFileInput = React.forwardRef(({ label, name, onChange, required = fal
 // --- Main Admin Page Component ---
 const AdminPage = () => {
     // --- State (Unchanged) ---
+
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -85,6 +86,9 @@ const AdminPage = () => {
         confirmText: 'Confirm'
     });
     const [newContractName, setNewContractName] = useState('');
+    const [stepNoteInput, setStepNoteInput] = useState(''); // Tracks the text in the textarea
+    const [currentStepNote, setCurrentStepNote] = useState(''); // Stores the note fetched from the backend for display comparison
+    const [isSavingStepNote, setIsSavingStepNote] = useState(false);
     // --- End of State ---
 
     // --- Fetching Functions (Unchanged) ---
@@ -318,20 +322,59 @@ const AdminPage = () => {
         setContractFileName('');
         setRejectionNotes({});
         setNewRequirement({ document_name: '', document_notes: '' });
-
+        setStepNoteInput('');
+        setCurrentStepNote('');
         if (userId) {
-            // Convert userId from string (select value) to number for comparison if needed
-            const user = usersList.find(u => u.user_id === userId); // Using strict equality now
+            const user = usersList.find(u => u.user_id == userId); // Loose equality
             if (user) {
                 setSelectedUserCurrentStep(user.onboarding_step);
+                // --- Load existing step note into state ---
+                setCurrentStepNote(user.step_notes || ''); // Set display value
+                setStepNoteInput(user.step_notes || ''); // Set textarea value
+                // --- End Load ---
             } else {
-                setSelectedUserCurrentStep(null); // User not found? Reset step.
+                setSelectedUserCurrentStep(null);
             }
         } else {
             setSelectedUserCurrentStep(null);
         }
     };
+    const handleSaveStepNote = async () => {
+        if (!selectedUserId) return;
 
+        setIsSavingStepNote(true);
+        setStepMessage({ type: 'info', text: 'Saving note...' }); // Use step message area
+
+        try {
+            // Call the new backend script
+            const response = await fetch('https://renaisons.com/api/add_step_note.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: selectedUserId,
+                    note_content: stepNoteInput // Send current textarea value
+                }),
+                credentials: 'include'
+            });
+            const result = await response.json();
+
+            if (response.ok && result.status === 'success') {
+                setStepMessage({ type: 'success', text: 'Step note saved!' });
+                setCurrentStepNote(stepNoteInput); // Update the 'current' note display value
+                // Update the note in the main usersList state so it persists if user is re-selected
+                setUsersList(prev => prev.map(u =>
+                    u.user_id == selectedUserId ? { ...u, step_notes: stepNoteInput } : u
+                ));
+            } else {
+                setStepMessage({ type: 'error', text: `Failed to save note: ${result.message || 'Server error'}` });
+            }
+        } catch (error) {
+            console.error("Error saving step note:", error);
+            setStepMessage({ type: 'error', text: 'An error occurred while saving the note.' });
+        } finally {
+            setIsSavingStepNote(false);
+        }
+    };
 
     // --- *** CHANGE 1: Update "Move to Next Step" Logic *** ---
     const handleMoveToNextStep = async () => {
@@ -538,7 +581,7 @@ const AdminPage = () => {
                 {selectedUserId && (
                     <div className="space-y-8">
                         {/* User Status / Step Management (Unchanged) */}
-                        <div className="border border-neutral-700 rounded-lg p-4">
+                        <div className="border border-neutral-700 rounded-lg p-4 space-y-4">
                             {/* ... Step display and button ... */}
                             <h3 className="text-lg font-medium mb-3 text-neutral-300">
                                 User Status: <span className="font-semibold text-white">{selectedUserDisplay}</span>
@@ -559,6 +602,28 @@ const AdminPage = () => {
                                 {isUpdatingStep ? 'Moving...' :
                                     atMaxStep ? 'At Final Step' :
                                         `Move to: ${nextStepName || 'Next Step'}`}
+                            </button>
+                        </div>
+                        <div className="pt-4 border-t border-neutral-600">
+                            <label htmlFor="stepNotes" className="block text-sm font-medium text-neutral-300 mb-1">
+                                Admin Notes for this Step (Visible to User):
+                            </label>
+                            <textarea
+                                id="stepNotes"
+                                rows="3"
+                                className="w-full bg-neutral-700 border border-neutral-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-white text-sm mb-2"
+                                placeholder="Enter notes for the user regarding this step..."
+                                value={stepNoteInput}
+                                onChange={(e) => setStepNoteInput(e.target.value)}
+                                disabled={isSavingStepNote}
+                            />
+                            <button
+                                onClick={handleSaveStepNote}
+                                // Disable if saving or if the input hasn't changed from the fetched note
+                                disabled={isSavingStepNote || stepNoteInput === currentStepNote}
+                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded-md text-sm disabled:opacity-50 transition-colors"
+                            >
+                                {isSavingStepNote ? 'Saving...' : 'Save Step Note'}
                             </button>
                         </div>
 

@@ -20,8 +20,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
         setTimeout(() => {
             window.location.reload();
         }, 100);
-        // --- Add a small delay before navigating ---
-        // This gives AuthContext a moment to update its state
+
         setTimeout(() => {
 
             // --- MODIFIED: Navigate based on role ---

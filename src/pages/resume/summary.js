@@ -18,7 +18,7 @@ const Summary = () => {
         }
 
         try {
-            const response = await fetch('/api/save_summary.php', {
+            const response = await fetch('https://renaisons.com/api/save_summary.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ summary: summary, resume_id: resumeId }),

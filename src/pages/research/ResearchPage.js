@@ -1,6 +1,5 @@
 import React from 'react';
 import { researchArticles } from '../../data/researchData'; // Import the new data
-import Footer from '../../components/layout/Footer';
 const ResearchPage = () => {
     return (
         <div className="p-8 md:p-12">
@@ -42,7 +41,6 @@ const ResearchPage = () => {
                     </div>
                 ))}
             </div>
-            <Footer />
         </div>
 
     );

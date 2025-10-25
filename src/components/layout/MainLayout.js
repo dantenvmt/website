@@ -1,3 +1,4 @@
+// src/components/layout/MainLayout.js
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import SideNav from './SideNav';
@@ -10,7 +11,7 @@ const MainLayout = () => {
 
 
     return (
-        <div className="bg-black text-white font-sans antialiased flex h-screen">
+        <div className="bg-black text-white font-sans antialiased flex min-h-screen">
             <SideNav
                 isNavOpen={isNavOpen}
                 isDesktopNavOpen={isDesktopNavOpen}
@@ -18,12 +19,12 @@ const MainLayout = () => {
                 setIsDesktopNavOpen={setIsDesktopNavOpen}
 
             />
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col">
                 <TopHeader
                     isNavOpen={isNavOpen}
                     setIsNavOpen={setIsNavOpen}
                 />
-                <main className="flex-grow overflow-y-auto">
+                <main className="flex-grow">
                     <Outlet />
                     <Footer />
                 </main>

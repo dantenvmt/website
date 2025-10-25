@@ -34,6 +34,8 @@ import AdminPage from './pages/admin/AdminPage';
 import NotFoundPage from './pages/NotFoundPage';
 import UserStatusPage from './pages/user/UserStatusPage';
 import ChangePasswordPage from './pages/user/ChangePasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 export default function App() {
   return (
     <AuthProvider>
@@ -78,7 +80,8 @@ export default function App() {
             <Route path='job_board' element={<JobBoard />} />
 
             <Route path="login" element={<LoginPage />} />
-
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             {/* --- Resume Routes --- */}
             {/* The main dashboard for resumes */}
             <Route

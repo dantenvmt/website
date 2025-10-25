@@ -1,7 +1,8 @@
 // src/components/auth/LoginModal.jsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../context/AuthContext'; // Make sure this path is correct
+import { useAuth } from '../../context/AuthContext.js'; // Make sure this path is correct
+import { Link } from 'react-router-dom'; // <-- IMPORT LINK
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     const { login } = useAuth();
@@ -78,7 +79,19 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                                 autoComplete="current-password"
                             />
 
-                            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                            {/* --- START: ADDED FORGOT PASSWORD LINK --- */}
+                            <div className="text-right pt-1">
+                                <Link
+                                    to="/forgot-password" // Link to the Forgot Password page
+                                    onClick={onClose} // Close the modal when link is clicked
+                                    className="text-sm text-blue-400 hover:underline"
+                                >
+                                    Forgot Password?
+                                </Link>
+                            </div>
+                            {/* --- END: ADDED FORGOT PASSWORD LINK --- */}
+
+                            {error && <p className="text-red-500 text-sm text-center pt-2">{error}</p>}
 
                             <button
                                 type="submit"
@@ -115,3 +128,4 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
 };
 
 export default LoginModal;
+

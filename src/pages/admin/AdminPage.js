@@ -1,6 +1,7 @@
 // src/pages/admin/AdminPage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ConfirmModal from '../../components/common/ConfirmModal';
+import ConfirmModal from '../../components/common/ConfirmModal.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 // --- Define Updated Onboarding Steps (Unchanged) ---
 const STEP_DEFINITIONS = {
@@ -56,8 +57,8 @@ const AdminFileInput = React.forwardRef(({ label, name, onChange, required = fal
 
 // --- Main Admin Page Component ---
 const AdminPage = () => {
-    // --- State (Unchanged) ---
-
+    // --- State ---
+    const { user: adminUser } = useAuth();
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -66,8 +67,8 @@ const AdminPage = () => {
     const [selectedUserCurrentStep, setSelectedUserCurrentStep] = useState(null);
     const [assignedRequirements, setAssignedRequirements] = useState([]);
     const [newRequirement, setNewRequirement] = useState({ document_name: '', document_notes: '' });
-    const [assignmentMessage, setAssignmentMessage] = useState({ type: '', text: '' }); // For Step 2 messages
-    const [stepMessage, setStepMessage] = useState({ type: '', text: '' });
+    const [assignmentMessage, setAssignmentMessage] = useState({ type: '', text: '' });
+    const [stepMessage, setStepMessage] = useState({ type: '', text: '' }); // General message for step/delete actions
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
     const [isUpdatingStep, setIsUpdatingStep] = useState(false);
@@ -76,7 +77,7 @@ const AdminPage = () => {
     const [contractFile, setContractFile] = useState(null);
     const [contractFileName, setContractFileName] = useState('');
     const [isUploadingContract, setIsUploadingContract] = useState(false);
-    const [contractMessage, setContractMessage] = useState({ type: '', text: '' }); // For Step 1 messages
+    const [contractMessage, setContractMessage] = useState({ type: '', text: '' });
     const contractInputRef = useRef(null);
     const [modalState, setModalState] = useState({
         isOpen: false,
@@ -86,13 +87,15 @@ const AdminPage = () => {
         confirmText: 'Confirm'
     });
     const [newContractName, setNewContractName] = useState('');
-    const [stepNoteInput, setStepNoteInput] = useState(''); // Tracks the text in the textarea
-    const [currentStepNote, setCurrentStepNote] = useState(''); // Stores the note fetched from the backend for display comparison
+    const [stepNoteInput, setStepNoteInput] = useState('');
+    const [currentStepNote, setCurrentStepNote] = useState('');
     const [isSavingStepNote, setIsSavingStepNote] = useState(false);
+    const [deleteUserMessage, setDeleteUserMessage] = useState({ type: '', text: '' }); // Message specifically for delete user section
+    const [isDeletingUser, setIsDeletingUser] = useState(false); // Loading state for delete button
     // --- End of State ---
 
     // --- Fetching Functions (Unchanged) ---
-    const fetchUsers = useCallback(async () => { /* ... */
+    const fetchUsers = useCallback(async () => {
         setIsLoadingUsers(true);
         try {
             const response = await fetch('https://renaisons.com/api/get_users.php', {
@@ -102,26 +105,22 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setUsersList(result.users);
             } else {
-                // Use a general message area or handle differently
                 console.error(`Failed to load users: ${result.message}`);
-                // setAssignmentMessage({ type: 'error', text: `Failed to load users: ${result.message}` });
             }
         } catch (error) {
             console.error("Error fetching users:", error);
-            // setAssignmentMessage({ type: 'error', text: 'Failed to load users.' });
         } finally {
             setIsLoadingUsers(false);
         }
     }, []);
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-    const fetchUserRequirements = useCallback(async () => { /* ... */
+    const fetchUserRequirements = useCallback(async () => {
         if (!selectedUserId) {
             setAssignedRequirements([]);
             return;
         }
         setIsLoadingRequirements(true);
-        // Clear both message areas when fetching requirements
         setAssignmentMessage({ type: '', text: '' });
         setContractMessage({ type: '', text: '' });
         try {
@@ -132,14 +131,11 @@ const AdminPage = () => {
             if (response.ok && result.status === 'success') {
                 setAssignedRequirements(result.requirements);
             } else {
-                // Use a relevant message area or console log
                 console.error(`Failed to load requirements: ${result.message}`);
-                // setAssignmentMessage({ type: 'error', text: `Failed to load requirements: ${result.message}` });
                 setAssignedRequirements([]);
             }
         } catch (error) {
             console.error("Error fetching user requirements:", error);
-            // setAssignmentMessage({ type: 'error', text: 'An error occurred while fetching requirements.' });
         } finally {
             setIsLoadingRequirements(false);
         }
@@ -148,11 +144,11 @@ const AdminPage = () => {
     // --- End of Fetching Functions ---
 
     // --- Handlers for Create User (Unchanged) ---
-    const handleNewUserChange = (e) => {/* ... */
+    const handleNewUserChange = (e) => {
         const { name, value } = e.target;
         setNewUser(prev => ({ ...prev, [name]: value }));
     };
-    const handleCreateUserSubmit = async (e) => {/* ... */
+    const handleCreateUserSubmit = async (e) => {
         e.preventDefault();
         setIsCreatingUser(true);
         setCreateUserMessage({ type: '', text: '' });
@@ -185,12 +181,12 @@ const AdminPage = () => {
         setModalState({ isOpen: false });
     };
 
-    // --- Handlers for Managing Requirements (Apply to Both Step 1 Contracts & Step 2 Docs) ---
-    const handleNewRequirementChange = (e) => {/* ... */
+    // --- Handlers for Managing Requirements (Unchanged) ---
+    const handleNewRequirementChange = (e) => {
         const { name, value } = e.target;
         setNewRequirement(prev => ({ ...prev, [name]: value }));
     };
-    const handleAddRequirement = async (e) => {/* ... */
+    const handleAddRequirement = async (e) => {
         e.preventDefault();
         if (!newRequirement.document_name.trim()) {
             setAssignmentMessage({ type: 'error', text: 'Document name cannot be empty.' });
@@ -231,7 +227,6 @@ const AdminPage = () => {
     // Delete Logic (Unchanged)
     const performRemoveRequirement = async (userDocumentId) => {
         handleModalClose();
-        // Use the correct message area based on the current step
         const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
         try {
             const response = await fetch('https://renaisons.com/api/remove_requirement.php', {
@@ -260,7 +255,7 @@ const AdminPage = () => {
             notes = rejectionNotes[userDocumentId] || '';
         } else if (newStatus === 'approved') {
             const req = assignedRequirements.find(r => r.user_document_id === userDocumentId);
-            notes = `${req?.document_name || 'Document'} approved`; // Generic approval note
+            notes = `${req?.document_name || 'Document'} approved`;
         }
 
         const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
@@ -271,7 +266,7 @@ const AdminPage = () => {
         }
 
         setIsUpdatingStatus(userDocumentId);
-        setAssignmentMessage({ type: '', text: '' }); // Clear both
+        setAssignmentMessage({ type: '', text: '' });
         setContractMessage({ type: '', text: '' });
 
         try {
@@ -316,6 +311,7 @@ const AdminPage = () => {
         setSelectedUserId(userId);
         // Clear all messages and inputs
         setStepMessage({ type: '', text: '' });
+        setDeleteUserMessage({ type: '', text: '' }); // <-- Clear delete message too
         setContractMessage({ type: '', text: '' });
         setAssignmentMessage({ type: '', text: '' });
         setContractFile(null);
@@ -328,10 +324,8 @@ const AdminPage = () => {
             const user = usersList.find(u => u.user_id == userId); // Loose equality
             if (user) {
                 setSelectedUserCurrentStep(user.onboarding_step);
-                // --- Load existing step note into state ---
-                setCurrentStepNote(user.step_notes || ''); // Set display value
-                setStepNoteInput(user.step_notes || ''); // Set textarea value
-                // --- End Load ---
+                setCurrentStepNote(user.step_notes || '');
+                setStepNoteInput(user.step_notes || '');
             } else {
                 setSelectedUserCurrentStep(null);
             }
@@ -339,20 +333,21 @@ const AdminPage = () => {
             setSelectedUserCurrentStep(null);
         }
     };
+
+    // --- Handler for Step Note (Unchanged) ---
     const handleSaveStepNote = async () => {
         if (!selectedUserId) return;
 
         setIsSavingStepNote(true);
-        setStepMessage({ type: 'info', text: 'Saving note...' }); // Use step message area
+        setStepMessage({ type: 'info', text: 'Saving note...' });
 
         try {
-            // Call the new backend script
             const response = await fetch('https://renaisons.com/api/add_step_note.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: selectedUserId,
-                    note_content: stepNoteInput // Send current textarea value
+                    note_content: stepNoteInput
                 }),
                 credentials: 'include'
             });
@@ -360,8 +355,7 @@ const AdminPage = () => {
 
             if (response.ok && result.status === 'success') {
                 setStepMessage({ type: 'success', text: 'Step note saved!' });
-                setCurrentStepNote(stepNoteInput); // Update the 'current' note display value
-                // Update the note in the main usersList state so it persists if user is re-selected
+                setCurrentStepNote(stepNoteInput);
                 setUsersList(prev => prev.map(u =>
                     u.user_id == selectedUserId ? { ...u, step_notes: stepNoteInput } : u
                 ));
@@ -376,15 +370,12 @@ const AdminPage = () => {
         }
     };
 
-    // --- *** CHANGE 1: Update "Move to Next Step" Logic *** ---
+    // --- Handler for Move to Next Step (Unchanged) ---
     const handleMoveToNextStep = async () => {
         if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
 
-        // --- MODIFIED Check ---
         if (selectedUserCurrentStep === 1) {
-            // Find all contracts for the user using the new type
-            const contracts = assignedRequirements.filter(r => r.document_type === 'contract'); // Filter by type
-            // Check if every contract is approved. Allow moving if there are no contracts.
+            const contracts = assignedRequirements.filter(r => r.document_type === 'contract');
             const allContractsApproved = contracts.length === 0 || contracts.every(c => c.status === 'approved');
 
             if (!allContractsApproved) {
@@ -392,7 +383,6 @@ const AdminPage = () => {
                 return;
             }
         }
-        // --- End of modification ---
 
         const nextStep = selectedUserCurrentStep + 1;
         setIsUpdatingStep(true);
@@ -409,7 +399,7 @@ const AdminPage = () => {
                 setStepMessage({ type: 'success', text: 'User moved to next step!' });
                 setSelectedUserCurrentStep(nextStep);
                 setUsersList(prevList => prevList.map(u =>
-                    u.user_id === selectedUserId ? { ...u, onboarding_step: nextStep } : u // Using strict equality now
+                    u.user_id === selectedUserId ? { ...u, onboarding_step: nextStep } : u
                 ));
             } else {
                 setStepMessage({ type: 'error', text: `Failed to update step: ${result.message}` });
@@ -421,11 +411,9 @@ const AdminPage = () => {
             setIsUpdatingStep(false);
         }
     };
-    // --- *** END OF CHANGE 1 *** ---
 
     // --- Handlers for Contract Upload (Unchanged) ---
-    // This section is now just for uploading *new* blank contracts
-    const handleContractFileChange = (e) => {/* ... */
+    const handleContractFileChange = (e) => {
         const file = e.target.files[0];
         setContractMessage({ type: '', text: '' });
         if (file) {
@@ -447,7 +435,6 @@ const AdminPage = () => {
         }
     };
     const handleContractUpload = async () => {
-        // Add validation for the new name field
         if (!selectedUserId || !contractFile || !newContractName.trim()) {
             setContractMessage({ type: 'error', text: 'Please select a user, choose a file, and enter a contract name.' });
             return;
@@ -460,7 +447,6 @@ const AdminPage = () => {
         const formData = new FormData();
         formData.append('userId', selectedUserId);
         formData.append('contractFile', contractFile);
-        // Append the new contract name
         formData.append('document_name', newContractName.trim());
 
         try {
@@ -474,12 +460,11 @@ const AdminPage = () => {
 
             if (response.ok && result.status === 'success') {
                 setContractMessage({ type: 'success', text: `Contract "${newContractName.trim()}" uploaded successfully!` });
-                // Reset fields
                 setContractFile(null);
                 setContractFileName('');
-                setNewContractName(''); // Clear the name input
+                setNewContractName('');
                 if (contractInputRef.current) contractInputRef.current.value = '';
-                fetchUserRequirements(); // Refresh requirements list
+                fetchUserRequirements();
             } else {
                 setContractMessage({ type: 'error', text: `Upload failed: ${result.message || 'Server error'}` });
             }
@@ -492,26 +477,90 @@ const AdminPage = () => {
     };
     // --- End of Contract Upload Handlers ---
 
+    // --- Handlers for Delete User (Unchanged) ---
+    const handleDeleteUserClick = () => {
+        if (!selectedUserId) return;
+
+        const user = usersList.find(u => u.user_id == selectedUserId);
+        const userName = user ? (user.first_name || user.email) : 'this user';
+
+        if (adminUser && user && adminUser.userId === user.user_id) {
+            setModalState({
+                isOpen: true,
+                title: 'Action Not Allowed',
+                message: 'You cannot delete your own admin account.',
+                confirmText: 'OK',
+                onConfirm: handleModalClose
+            });
+            return;
+        }
+
+        setModalState({
+            isOpen: true,
+            title: `Delete User: ${userName}`,
+            message: `Are you sure you want to permanently delete this user? All their associated documents, contracts, and status will be erased. This action cannot be undone.`,
+            confirmText: 'Delete User',
+            onConfirm: () => performDeleteUser(user.user_id)
+        });
+    };
+
+    const performDeleteUser = async (userIdToDelete) => {
+        handleModalClose();
+        setIsDeletingUser(true); // <-- Set loading state
+        setDeleteUserMessage({ type: 'info', text: 'Deleting user...' });
+
+        try {
+            const response = await fetch('https://renaisons.com/api/delete_user.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userIdToDelete }),
+                credentials: 'include'
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.status === 'success') {
+                setDeleteUserMessage({ type: 'success', text: 'User deleted successfully.' });
+                setSelectedUserId(''); // <-- Deselect user
+                setSelectedUserCurrentStep(null);
+                setAssignedRequirements([]);
+                fetchUsers(); // Refresh list
+            } else {
+                setDeleteUserMessage({ type: 'error', text: `Failed to delete user: ${result.message}` });
+            }
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            setDeleteUserMessage({ type: 'error', text: 'An error occurred while deleting the user.' });
+        } finally {
+            setIsDeletingUser(false); // <-- Clear loading state
+        }
+    };
+    // --- END: Handlers for Delete User ---
+
+
     // --- Helper variables ---
     const currentStepName = STEP_DEFINITIONS[selectedUserCurrentStep] || 'Unknown Step';
     const nextStepName = STEP_DEFINITIONS[selectedUserCurrentStep + 1];
     const atMaxStep = selectedUserCurrentStep >= MAX_STEP;
-    const getSelectedUserDisplay = () => { /* ... (unchanged) */
+    const getSelectedUserDisplay = (full = false) => { // Added 'full' parameter
         if (!selectedUserId) return '';
-        const user = usersList.find(u => u.user_id === selectedUserId); // Loose equality ok
+        const user = usersList.find(u => u.user_id == selectedUserId); // Use == for loose comparison
         if (!user) return '';
         if (user.first_name && user.last_name) {
-            return `${user.first_name} ${user.last_name} (${user.email})`;
+            return full ? `${user.first_name} ${user.last_name} (${user.email})` : `${user.first_name} ${user.last_name}`;
         }
         return user.email;
     };
-    const selectedUserDisplay = getSelectedUserDisplay();
-
-    // --- *** CHANGE 2: Filter contracts for Step 1 *** ---
+    const selectedUserDisplayFull = getSelectedUserDisplay(true); // For main section
+    const selectedUserDisplayShort = getSelectedUserDisplay(false); // For delete button
     const step1Contracts = assignedRequirements.filter(
-        req => req.document_type === 'contract' // Filter by type
+        req => req.document_type === 'contract'
     );
-    // --- *** END OF CHANGE 2 *** ---
+    const step2Requirements = assignedRequirements.filter(
+        req => req.document_type === 'other'
+    );
+    // --- *** END OF CHANGE *** ---
+
 
     // --- Render Logic ---
     return (
@@ -520,7 +569,6 @@ const AdminPage = () => {
 
             {/* --- Section: Create User (Unchanged) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
-                {/* ... Create User form ... */}
                 <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
                 <form onSubmit={handleCreateUserSubmit} className="space-y-4 max-w-lg">
                     <AdminFormInput
@@ -553,13 +601,58 @@ const AdminPage = () => {
                 </form>
             </section>
 
-            {/* --- Section: Manage User (Unchanged structure) --- */}
+            {/* --- NEW: Section: Delete User --- */}
+            <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
+                <h2 className="text-2xl font-semibold mb-4 text-red-400">Delete User Account</h2>
+                <div className="mb-4">
+                    <label htmlFor="deleteUserSelect" className="block text-sm font-medium text-neutral-300 mb-1">Select User to Delete</label>
+                    {/* Re-using the same state variable for selection */}
+                    <select
+                        id="deleteUserSelect"
+                        value={selectedUserId}
+                        onChange={handleUserSelectionChange}
+                        disabled={isLoadingUsers}
+                        className="w-full md:w-1/2 bg-neutral-700 border border-neutral-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-white"
+                    >
+                        <option value="">-- Select a User --</option>
+                        {usersList.map(u => (
+                            <option key={u.user_id} value={u.user_id}>
+                                {u.last_name || u.first_name ? `${u.last_name}, ${u.first_name} (${u.email})` : u.email}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {selectedUserId && (
+                    <div className="border-t border-red-700/30 pt-4 mt-4">
+                        <p className="text-sm text-neutral-400 mb-4">
+                            Permanently delete <span className='font-semibold text-white'>{selectedUserDisplayFull}</span> and all their associated data. This action cannot be undone.
+                        </p>
+                        <button
+                            onClick={handleDeleteUserClick}
+                            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 transition-colors flex-shrink-0"
+                            disabled={!selectedUserId || (adminUser && adminUser.userId == selectedUserId) || isDeletingUser}
+                            title={adminUser && adminUser.userId == selectedUserId ? "Cannot delete yourself" : "Delete User"}
+                        >
+                            {isDeletingUser ? 'Deleting...' : `Delete ${selectedUserDisplayShort ? selectedUserDisplayShort : 'User'}'s Account`}
+                        </button>
+                    </div>
+                )}
+                {/* Message display for delete section */}
+                {deleteUserMessage.text && (
+                    <p className={`text-sm mt-4 ${deleteUserMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                        {deleteUserMessage.text}
+                    </p>
+                )}
+            </section>
+
+
+            {/* --- Section: Manage User Status & Requirements (Delete button moved from here) --- */}
             <section className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
                 <h2 className="text-2xl font-semibold mb-4">Manage User Status & Requirements</h2>
 
-                {/* User Selection Dropdown (Unchanged) */}
+                {/* User Selection Dropdown */}
                 <div className="mb-6">
-                    {/* ... Select dropdown ... */}
                     <label htmlFor="userSelect" className="block text-sm font-medium text-neutral-300 mb-1">Select User to Manage</label>
                     <select
                         id="userSelect"
@@ -580,15 +673,21 @@ const AdminPage = () => {
                 {/* Section appears once a user is selected */}
                 {selectedUserId && (
                     <div className="space-y-8">
-                        {/* User Status / Step Management (Unchanged) */}
+                        {/* User Status / Step Management */}
                         <div className="border border-neutral-700 rounded-lg p-4 space-y-4">
-                            {/* ... Step display and button ... */}
-                            <h3 className="text-lg font-medium mb-3 text-neutral-300">
-                                User Status: <span className="font-semibold text-white">{selectedUserDisplay}</span>
-                            </h3>
-                            <p className="text-md mb-3 text-neutral-200">
-                                Current Step: <span className="font-semibold">{currentStepName}</span>
-                            </p>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-lg font-medium mb-3 text-neutral-300">
+                                        User Status: <span className="font-semibold text-white">{selectedUserDisplayFull}</span>
+                                    </h3>
+                                    <p className="text-md mb-3 text-neutral-200">
+                                        Current Step: <span className="font-semibold">{currentStepName}</span>
+                                    </p>
+                                </div>
+                                {/* Delete button removed from here */}
+                            </div>
+
+                            {/* General message display (can show step update success/error here) */}
                             {stepMessage.text && (
                                 <p className={`text-sm mb-3 ${stepMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
                                     {stepMessage.text}
@@ -604,6 +703,7 @@ const AdminPage = () => {
                                         `Move to: ${nextStepName || 'Next Step'}`}
                             </button>
                         </div>
+                        {/* Step Note (Unchanged) */}
                         <div className="pt-4 border-t border-neutral-600">
                             <label htmlFor="stepNotes" className="block text-sm font-medium text-neutral-300 mb-1">
                                 Admin Notes for this Step (Visible to User):
@@ -619,7 +719,6 @@ const AdminPage = () => {
                             />
                             <button
                                 onClick={handleSaveStepNote}
-                                // Disable if saving or if the input hasn't changed from the fetched note
                                 disabled={isSavingStepNote || stepNoteInput === currentStepNote}
                                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded-md text-sm disabled:opacity-50 transition-colors"
                             >
@@ -628,15 +727,13 @@ const AdminPage = () => {
                         </div>
 
 
-                        {/* --- *** CHANGE 3: Update Step 1 Section UI *** --- */}
+                        {/* Step 1: Contracts (Unchanged) */}
                         {selectedUserCurrentStep === 1 && (
                             <div className="border border-neutral-700 rounded-lg p-4 space-y-6">
-                                {/* Section Title */}
                                 <div>
                                     <h3 className="text-lg font-medium text-neutral-300">
-                                        Step 1: Contracts for {selectedUserDisplay}
+                                        Step 1: Contracts for {selectedUserDisplayFull}
                                     </h3>
-                                    {/* Display Step 1 specific messages */}
                                     {contractMessage.text && (
                                         <p className={`text-sm mt-2 p-2 rounded ${contractMessage.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' :
                                             contractMessage.type === 'success' ? 'bg-green-900/50 border border-green-700 text-green-300' :
@@ -646,14 +743,11 @@ const AdminPage = () => {
                                         </p>
                                     )}
                                 </div>
-
-                                {/* Contract List Table (Similar to Step 2) */}
                                 <div className="overflow-x-auto border border-neutral-600 rounded-lg">
                                     <table className="min-w-full divide-y divide-neutral-600">
                                         <thead className="bg-neutral-700">
                                             <tr>
                                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Contract Name</th>
-                                                {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Notes</th> */}
                                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Status</th>
                                                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-neutral-300 uppercase tracking-wider">Review/Actions</th>
                                                 <th scope="col" className="relative px-6 py-3 w-12"><span className="sr-only">Actions</span></th>
@@ -666,22 +760,19 @@ const AdminPage = () => {
                                             {!isLoadingRequirements && step1Contracts.length === 0 && (
                                                 <tr><td colSpan="4" className="text-center p-4 text-neutral-400">No contracts uploaded for this user yet.</td></tr>
                                             )}
-                                            {/* Map over the filtered contracts */}
                                             {!isLoadingRequirements && step1Contracts.map((contract) => (
                                                 <tr key={contract.user_document_id}>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{contract.document_name}</td>
-                                                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{contract.document_notes}</td> */}
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
                                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${contract.status === 'approved' ? 'bg-green-800 text-green-100' :
                                                             contract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' :
                                                                 contract.status === 'rejected' ? 'bg-red-800 text-red-100' :
-                                                                    'bg-gray-700 text-gray-100' // pending
+                                                                    'bg-gray-700 text-gray-100'
                                                             }`}>
                                                             {contract.status}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
-                                                        {/* View Link */}
                                                         {(contract.status === 'submitted' || contract.status === 'approved' || contract.status === 'rejected') ? (
                                                             <a
                                                                 href={`https://renaisons.com/api/download_user_document.php?doc_id=${contract.user_document_id}`}
@@ -693,7 +784,6 @@ const AdminPage = () => {
                                                         ) : (
                                                             <span className="text-neutral-500 mr-3">No User File</span>
                                                         )}
-                                                        {/* Approve/Reject Buttons */}
                                                         {contract.status === 'submitted' && (
                                                             <div className="flex flex-col sm:flex-row gap-2 items-start">
                                                                 <button
@@ -720,7 +810,6 @@ const AdminPage = () => {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {/* Display Admin Notes */}
                                                         {contract.admin_notes && (contract.status === 'rejected' || contract.status === 'approved') && (
                                                             <p className={`text-xs mt-1 ${contract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>
                                                                 Notes: {contract.admin_notes}
@@ -731,7 +820,6 @@ const AdminPage = () => {
                                                         )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                                        {/* Use the same remove handler */}
                                                         <button
                                                             onClick={() => handleRemoveRequirement(contract.user_document_id)}
                                                             className="text-red-400 hover:text-red-600"
@@ -749,9 +837,7 @@ const AdminPage = () => {
                                     <h4 className="text-md font-medium mb-2 text-neutral-300">
                                         Upload New Blank Document for User (Step 1)
                                     </h4>
-                                    {/* Contract message display is handled above */}
                                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
-                                        {/* NEW Contract Name Input */}
                                         <div className="flex-grow w-full">
                                             <AdminFormInput
                                                 label="Document Name"
@@ -762,22 +848,20 @@ const AdminPage = () => {
                                                 required
                                             />
                                         </div>
-                                        {/* File Input */}
                                         <div className="flex-grow w-full">
                                             <AdminFileInput
                                                 label="Document File"
                                                 name="contractFile"
                                                 onChange={handleContractFileChange}
                                                 fileName={contractFileName}
-                                                required // Always require a file for upload
+                                                required
                                                 ref={contractInputRef}
                                             />
                                         </div>
-                                        {/* Upload Button */}
                                         <button
                                             type="button"
                                             onClick={handleContractUpload}
-                                            disabled={isUploadingContract || !contractFile || !newContractName.trim()} // Also disable if name is empty
+                                            disabled={isUploadingContract || !contractFile || !newContractName.trim()}
                                             className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50 flex-shrink-0"
                                         >
                                             {isUploadingContract ? 'Uploading...' : 'Upload Document'}
@@ -786,15 +870,13 @@ const AdminPage = () => {
                                 </div>
                             </div>
                         )}
-                        {/* --- *** END OF CHANGE 3 *** --- */}
 
 
-                        {/* --- Requirements Section (Step 2) (Unchanged) --- */}
+                        {/* --- Requirements Section (Step 2) --- */}
                         {selectedUserCurrentStep === 2 && (
                             <div>
-                                {/* ... Step 2 content remains exactly the same ... */}
                                 <h3 className="text-lg font-medium mb-2 text-neutral-300">
-                                    Step 2: Assigned Requirements for {selectedUserDisplay}
+                                    Step 2: Assigned Requirements for {selectedUserDisplayFull}
                                 </h3>
                                 {assignmentMessage.text && (
                                     <p className={`text-sm mb-4 p-3 rounded ${assignmentMessage.type === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' : 'bg-green-900/50 border border-green-700 text-green-300'}`}>
@@ -816,10 +898,10 @@ const AdminPage = () => {
                                             {isLoadingRequirements && (
                                                 <tr><td colSpan="5" className="text-center p-4 text-neutral-400">Loading requirements...</td></tr>
                                             )}
-                                            {!isLoadingRequirements && assignedRequirements.length === 0 && (
+                                            {!isLoadingRequirements && step2Requirements.length === 0 && (
                                                 <tr><td colSpan="5" className="text-center p-4 text-neutral-400">No requirements assigned for this step.</td></tr>
                                             )}
-                                            {!isLoadingRequirements && assignedRequirements.map((req) => (
+                                            {!isLoadingRequirements && step2Requirements.map((req) => (
                                                 <tr key={req.user_document_id}>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{req.document_name}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">{req.document_notes}</td>
@@ -899,7 +981,7 @@ const AdminPage = () => {
                                 {/* Add New Requirement Form */}
                                 <form onSubmit={handleAddRequirement} className="border-t border-neutral-700 pt-6">
                                     <h4 className="text-md font-medium mb-2 text-neutral-300">
-                                        Add New Requirement for {selectedUserDisplay}
+                                        Add New Requirement for {selectedUserDisplayFull}
                                     </h4>
                                     <div className="flex flex-col md:flex-row gap-4 items-end">
                                         <div className="flex-grow w-full">
@@ -923,12 +1005,13 @@ const AdminPage = () => {
                         {selectedUserCurrentStep >= 3 && (
                             <div className="border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-lg font-medium text-neutral-300">
-                                    {STEP_DEFINITIONS[selectedUserCurrentStep]} for {selectedUserDisplay}
+                                    {STEP_DEFINITIONS[selectedUserCurrentStep]} for {selectedUserDisplayFull}
                                 </h3>
                                 <p className="text-neutral-400">Content for this step goes here.</p>
-                                {/* You might want to display a summary of requirements or final status */}
                             </div>
                         )}
+
+                        {/* --- Delete section removed from here --- */}
 
                     </div>
                 )}
@@ -949,3 +1032,4 @@ const AdminPage = () => {
 };
 
 export default AdminPage;
+

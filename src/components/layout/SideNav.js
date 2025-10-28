@@ -166,7 +166,7 @@ const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpe
             {/* Mobile Nav */}
             <aside className={mobileNavClasses}>
                 <NavHeader isDesktopNavOpen={true} onToggle={() => setIsNavOpen(false)} />
-                <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 opacity-100`}>
+                <div className={`flex flex-col flex-grow overflow-hidden transition-opacity duration-200 opacity-100 `}>
                     <div className="relative flex-grow">
                         <div className={`absolute inset-0 transition-transform duration-300 ease-in-out ${activeSubNav ? '-translate-x-full' : 'translate-x-0'}`}>
                             <MainNavPanel handleNavClick={handleNavClick} user={user} />

@@ -4,7 +4,15 @@ import { useResume } from '../../context/ResumeContext';
 
 const CreateResumeModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
-    const { setJobDescription, setContact, setSummary, setExperiences, resetResume } = useResume();
+
+    // Get all functions and initial state objects from context
+    const {
+        resetResume, setJobDescription, setContact, setSummary, setSkills,
+        setExperiences, setEducations, setProjects, setAwards, setCertifications,
+        initialContact, initialExperiences, initialEducations,
+        initialProjects, initialAwards, initialCertifications
+    } = useResume();
+
     const [step, setStep] = useState(1);
     const [resumeName, setResumeName] = useState('');
     const [experienceLevel, setExperienceLevel] = useState('Entry level');
@@ -13,34 +21,30 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
     const [uploadedFile, setUploadedFile] = useState(null);
     const [jobInput, setJobInput] = useState('');
 
+    const [isLoading, setIsLoading] = useState(false);
+    const [message, setMessage] = useState({ type: '', text: '' });
+
     if (!isOpen) return null;
 
+    // This function is fine
     const handleManualBuild = async (e) => {
         e.preventDefault();
-
-        // --- ADD THIS CHECK ---
-        const trimmedName = resumeName.trim(); // Trim whitespace first
-        if (!trimmedName) { // Check if the trimmed name is empty
+        const trimmedName = resumeName.trim();
+        if (!trimmedName) {
             alert('Please enter a resume name.');
-            return; // Stop the function
+            return;
         }
-        // --- END OF CHECK ---
-
         try {
             const response = await fetch('https://renaisons.com/api/create_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Send the trimmed name
                 body: JSON.stringify({ resumeName: trimmedName }),
-                credentials: 'include' // Make sure this is still here
+                credentials: 'include'
             });
-
             const result = await response.json();
-
             if (result.status === 'success' && result.resume_id) {
                 resetResume();
                 const targetUrl = `/resume/${result.resume_id}/contact`;
-                // Pass the trimmed name in the state
                 navigate(targetUrl, { state: { resumeName: trimmedName } });
                 handleClose();
             } else {
@@ -52,44 +56,97 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         }
     };
 
+    // This function includes all fixes: data mapping, isNewAiResume flag
     const handleAiBuild = async (e) => {
         e.preventDefault();
-        const trimmedName = resumeName.trim(); // Trim whitespace first
-        if (!trimmedName) { // Check if the trimmed name is empty
+        const trimmedName = resumeName.trim();
+        if (!trimmedName) {
             alert('Please enter a resume name.');
-            return; // Stop the function
+            return;
         }
+        if (!uploadedFile) {
+            alert('Please upload your resume file.');
+            return;
+        }
+
+        setIsLoading(true);
+        setMessage({ type: '', text: '' });
+
+        const formData = new FormData();
+        formData.append('resumeFile', uploadedFile);
+        formData.append('resumeName', trimmedName);
+
         try {
-            const response = await fetch('https://renaisons.com/api/create_resume.php', {
+            // 1. CALL GROQ BACKEND
+            const parseResponse = await fetch('https://renaisons.com/api/parse_resume_groq.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resumeName: resumeName }),
+                body: formData,
+                credentials: 'include',
             });
 
-            const result = await response.json();
+            if (!parseResponse.ok) {
+                const errData = await parseResponse.json();
+                throw new Error(errData.error || `Parsing failed: ${parseResponse.statusText}`);
+            }
 
-            if (result.status === 'success' && result.resume_id) {
-                resetResume();
+            // 2. GET THE CLEAN JSON
+            const parsedResult = await parseResponse.json();
+
+            // 2b. FIX DATA MISMATCHES
+            const contactData = {
+                ...initialContact, // This is the OBJECT
+                ...parsedResult.contact,
+                fullName: parsedResult.contact.name || ''
+            };
+
+            let skillsData = '';
+            if (Array.isArray(parsedResult.skills)) {
+                skillsData = parsedResult.skills.join(', ');
+            } else {
+                skillsData = parsedResult.skills || '';
+            }
+
+            // 3. CREATE THE RESUME ENTRY IN DB
+            const createResponse = await fetch('https://renaisons.com/api/create_resume.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resumeName: trimmedName }),
+                credentials: 'include'
+            });
+            const createResult = await createResponse.json();
+
+            if (createResult.status === 'success' && createResult.resume_id) {
+                // DO NOT resetResume() here. Let the cleanup hook handle it.
+
+                // 4. POPULATE THE CONTEXT
+                setContact(contactData);
+                setSummary(parsedResult.summary || '');
+                setSkills(skillsData);
+                setExperiences(parsedResult.experiences && parsedResult.experiences.length > 0 ? parsedResult.experiences : initialExperiences());
+                setEducations(parsedResult.educations && parsedResult.educations.length > 0 ? parsedResult.educations : initialEducations());
+                setProjects(parsedResult.projects && parsedResult.projects.length > 0 ? parsedResult.projects : initialProjects());
+                setAwards(parsedResult.awards && parsedResult.awards.length > 0 ? parsedResult.awards : initialAwards());
+                setCertifications(parsedResult.certifications && parsedResult.certifications.length > 0 ? parsedResult.certifications : initialCertifications());
                 setJobDescription(jobInput);
 
-                // Now, set the AI-parsed data locally
-                alert("Simulating AI analysis... Your resume will be pre-filled with placeholder data.");
-                setContact({ fullName: 'Thuan Nguyen (AI Parsed)', email: 'thuannguyen.vm@gmail.com', phone: '9032599470', linkedin: 'thuan-nguyen-dev', city: 'Richardson', state: 'Texas', country: 'United States' });
-                setSummary('AI-parsed summary: Results-oriented Data Scientist with expertise in machine learning and data warehousing.');
-                setExperiences([{ id: Date.now(), role: 'Data Scientist (AI Parsed)', company: 'A.I. Tech Inc.', startDate: 'Jan 2025', endDate: 'Sep 2025', isCurrent: false, location: 'Dallas, TX', bullets: '• Leveraged machine learning models to increase sales forecasting accuracy by 25%.\n• Designed and implemented a new data warehousing solution, reducing query times by 40%.', aiUsesLeft: 3 }]);
+                // 5. NAVIGATE *WITH* THE FLAG
+                const targetUrl = `/resume/${createResult.resume_id}/contact`;
+                navigate(targetUrl, { state: { resumeName: trimmedName, isNewAiResume: true } });
 
-                // Navigate to the correct dynamic URL
-                const targetUrl = `/resume/${result.resume_id}/contact`;
-                navigate(targetUrl, { state: { resumeName: `${resumeName} (AI)` } });
                 handleClose();
+
             } else {
-                alert('Error from server: ' + (result.message || 'Unknown error.'));
+                throw new Error(createResult.message || 'Failed to create resume entry.');
             }
+
         } catch (error) {
-            console.error('Failed to create AI resume:', error);
-            alert('A critical error occurred. Please check the console.');
+            console.error('AI Build Error:', error);
+            setMessage({ type: 'error', text: `Error: ${error.message}` });
+        } finally {
+            setIsLoading(false);
         }
     };
+
 
     const handleClose = () => {
         setStep(1);
@@ -98,8 +155,12 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         setTargetMarket('');
         setUploadedFile(null);
         setJobInput('');
+        setIsLoading(false);
+        setMessage({ type: '', text: '' });
         onClose();
     };
+
+    // ... (rest of the file is unchanged: renderStepOne, renderStepTwo, renderStepThree, return) ...
 
     const renderStepOne = () => (
         <>
@@ -180,6 +241,18 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         <>
             <h1 className="text-2xl font-bold text-center mb-8">AI Resume Builder</h1>
             <form onSubmit={handleAiBuild} className="space-y-6">
+                {isLoading && (
+                    <div className="absolute inset-0 bg-slate-800 bg-opacity-70 flex items-center justify-center z-10 rounded-lg">
+                        <div className="text-white text-lg font-semibold">Parsing Your Resume...</div>
+                    </div>
+                )}
+
+                {message.text && (
+                    <div className={`p-3 rounded-md text-center ${message.type === 'error' ? 'bg-red-900 text-red-100' : 'bg-green-900 text-green-100'}`}>
+                        {message.text}
+                    </div>
+                )}
+
                 <div>
                     <label htmlFor="resumeName" className="block text-xs font-bold text-gray-400 uppercase mb-2">
                         RESUME NAME <span className="text-red-500">*</span>
@@ -192,6 +265,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                         placeholder="AI Data Scientist"
                         className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
                         required
+                        disabled={isLoading}
                     />
                 </div>
                 <div>
@@ -203,6 +277,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                         value={experienceLevel}
                         onChange={(e) => setExperienceLevel(e.target.value)}
                         className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 appearance-none focus:ring-blue-500 focus:border-blue-500"
+                        disabled={isLoading}
                     >
                         <option>Entry level</option>
                         <option>Mid Level</option>
@@ -220,13 +295,14 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                         onChange={(e) => setTargetMarket(e.target.value)}
                         placeholder="e.g., Fintech, Technology Sector"
                         className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
+                        disabled={isLoading}
                     />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">UPLOAD YOUR EXISTING RESUME <span className="text-red-500">*</span></label>
                     <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md">
                         <div className="space-y-1 text-center text-gray-500">
-                            <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setUploadedFile(e.target.files[0])} className="text-sm" />
+                            <input type="file" accept=".pdf" onChange={(e) => setUploadedFile(e.target.files[0])} className="text-sm" disabled={isLoading} />
                             {uploadedFile && <p className="text-xs pt-2 text-white">{uploadedFile.name}</p>}
                         </div>
                     </div>
@@ -242,12 +318,15 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                         rows="4"
                         placeholder="Paste the full job description here for best results..."
                         className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
+                        disabled={isLoading}
                     />
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-4">
-                    <button type="button" onClick={handleClose} className="text-gray-400 hover:text-white font-semibold py-2 px-6">CANCEL</button>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md">FINISH</button>
+                    <button type="button" onClick={handleClose} className="text-gray-400 hover:text-white font-semibold py-2 px-6" disabled={isLoading}>CANCEL</button>
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md" disabled={isLoading}>
+                        {isLoading ? 'BUILDING...' : 'FINISH'}
+                    </button>
                 </div>
             </form>
         </>
@@ -257,7 +336,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-8 w-full max-w-lg text-white relative">
-                <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold">&times;</button>
+                <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold" disabled={isLoading}>&times;</button>
                 {step === 1 && renderStepOne()}
                 {step === 2 && renderStepTwo()}
                 {step === 3 && renderStepThree()}

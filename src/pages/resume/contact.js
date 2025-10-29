@@ -24,6 +24,7 @@ const FeedbackModal = ({ title, message, onClose, isError }) => (
 
 const Contact = () => {
     const { contact, setContact, contactToggles, setContactToggles } = useResume();
+    console.log('Contact Page: Received contact data from context:', contact);
     const { resumeId } = useParams();
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
 

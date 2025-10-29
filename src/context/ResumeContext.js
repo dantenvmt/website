@@ -103,6 +103,7 @@ export const ResumeProvider = ({ children }) => {
     }, []);
 
     const value = useMemo(() => ({
+        // --- ALL YOUR EXISTING VALUES ---
         contact, setContact,
         contactToggles, setContactToggles,
         summary, setSummary,
@@ -114,9 +115,23 @@ export const ResumeProvider = ({ children }) => {
         projects, setProjects,
         jobDescription, setJobDescription,
         aiAnalysis, setAiAnalysis,
-        resetResume, addExperience, addEducation, addAward, addCertificate, addProject
-    }), [contact, contactToggles, summary, skills, experiences, educations, awards, certifications, projects, jobDescription, aiAnalysis, setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects, resetResume, addExperience, addEducation, addAward, addCertificate, addProject]);
+        resetResume, addExperience, addEducation, addAward, addCertificate, addProject,
 
+        // --- ADD THESE MISSING LINES ---
+        initialContact,
+        initialExperiences,
+        initialEducations,
+        initialAwards,
+        initialCertifications,
+        initialProjects
+
+    }), [
+        contact, contactToggles, summary, skills, experiences, educations, awards, certifications, projects, jobDescription, aiAnalysis,
+        setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects,
+        resetResume, addExperience, addEducation, addAward, addCertificate, addProject
+        // Note: You don't need to add the initial... functions to the dependency array
+        // because they are defined outside the provider and never change.
+    ]);
     return (
         <ResumeContext.Provider value={value}>
             {children}

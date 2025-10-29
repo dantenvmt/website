@@ -3,13 +3,24 @@ import { NavLink, useLocation, useNavigate, useParams, Outlet } from 'react-rout
 import UpdateResumeModal from './UpdateResumeModal';
 import { useResume } from '../../context/ResumeContext';
 import ConfirmModal from '../common/ConfirmModal';
+
 const EditorLayout = () => {
 
     const location = useLocation();
     const navigate = useNavigate();
     const { resumeId } = useParams();
 
-    const { setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects, resetResume } = useResume();
+    const {
+        setContact, setSummary, setSkills, setExperiences,
+        setEducations, setAwards, setCertifications, setProjects, resetResume
+    } = useResume();
+
+    // --- THIS IS THE FIX ---
+    // We use useState to "latch" the isNewAiResume flag on the *first render*.
+    // This component will now *remember* it's a new AI resume,
+    // even if the location.state changes on subsequent tab clicks.
+    const [isNewAi] = useState(location.state?.isNewAiResume || false);
+    // ----------------------
 
     const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Loading...');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -21,20 +32,27 @@ const EditorLayout = () => {
         onConfirm: () => { },
         confirmText: 'Confirm'
     });
+
+    // --- HOOK 1: DATA LOADING ---
+    // This hook runs when the page loads. It decides if it needs to fetch.
     useEffect(() => {
         const fetchResumeData = async () => {
             try {
-                const response = await fetch(`/api/get_resume_details.php?resume_id=${resumeId}`);
+                const response = await fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`, {
+                    credentials: 'include'
+                });
                 const result = await response.json();
 
                 if (result.status === 'success' && result.data) {
                     const { data } = result;
-                    const contactInfo = data.contact_info || {};
-                    if (contactInfo.full_name) {
-                        contactInfo.fullName = contactInfo.full_name;
-                        delete contactInfo.full_name;
+
+                    const contactToSet = data.contact_info || {};
+                    if (contactToSet.full_name) {
+                        contactToSet.fullName = contactToSet.full_name;
+                        delete contactToSet.full_name;
                     }
-                    setContact(contactInfo);
+
+                    setContact(contactToSet);
                     setSummary(data.summary?.summaries_description || '');
                     setSkills(data.skills?.skills_description || '');
                     setExperiences(data.experiences || []);
@@ -44,22 +62,23 @@ const EditorLayout = () => {
                     setProjects(data.projects || []);
                 } else {
                     console.error("Failed to fetch resume details:", result.message);
-                    navigate('/resume');
                 }
             } catch (error) {
                 console.error("Error fetching resume data:", error);
             }
         };
 
-        if (resumeId) {
+        // If it's a new AI resume (using our "latched" state), DO NOT fetch.
+        // Otherwise, fetch the data from the database.
+        if (resumeId && !isNewAi) {
             fetchResumeData();
         }
 
-        return () => {
-            resetResume();
-        };
     }, [
+        // This effect now only runs when resumeId or isNewAi changes.
+        // Since isNewAi is latched, this should only run ONCE on load.
         resumeId,
+        isNewAi,
         navigate,
         setContact,
         setSummary,
@@ -68,9 +87,18 @@ const EditorLayout = () => {
         setEducations,
         setAwards,
         setCertifications,
-        setProjects,
-        resetResume
+        setProjects
     ]);
+
+    // --- HOOK 2: CLEANUP ---
+    // This separate hook runs only once to set up the cleanup.
+    // It will *only* call resetResume() when you navigate *away* from EditorLayout.
+    useEffect(() => {
+        // The return function is the cleanup
+        return () => {
+            resetResume();
+        };
+    }, [resetResume]); // This dependency is stable
 
 
     const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
@@ -90,26 +118,25 @@ const EditorLayout = () => {
             title: 'Delete Resume',
             message: `Are you sure you want to permanently delete "${resumeName || 'this resume'}"? This action cannot be undone.`,
             confirmText: 'Delete',
-            onConfirm: performDelete // Set the action to perform on confirm
+            onConfirm: performDelete
         });
     };
 
     const performDelete = async () => {
-        setModalState({ isOpen: false }); // Close modal first
+        setModalState({ isOpen: false });
         try {
             const response = await fetch('https://renaisons.com/api/delete_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ resume_id: resumeId }),
-                credentials: 'include', // Important if your API uses sessions
+                credentials: 'include',
             });
-            const result = await response.json(); // Always try to parse JSON
+            const result = await response.json();
 
             if (result.status === 'success') {
-                alert(`Resume "${resumeName}" deleted.`); // Simple feedback for now
-                navigate('/resume'); // Navigate back to the dashboard
+                alert(`Resume "${resumeName}" deleted.`);
+                navigate('/resume');
             } else {
-                // Show error from API if available
                 console.error('API Error:', result.message || 'Unknown error');
                 alert(`Error deleting resume: ${result.message || 'Please try again.'}`);
             }
@@ -157,7 +184,8 @@ const EditorLayout = () => {
                                     <NavLink
                                         key={item}
                                         to={`/resume/${resumeId}/${item.toLowerCase()}`}
-                                        state={{ resumeName }}
+                                        // Pass the *original* location state to persist the flag
+                                        state={location.state}
                                         className={({ isActive }) =>
                                             `px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${isActive
                                                 ? 'bg-blue-600 text-white'

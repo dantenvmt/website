@@ -1,15 +1,16 @@
-import React, { useCallback } from 'react';
+// src/pages/resume/experience.js
+import React, { useCallback, useState } from 'react'; // Import useState
 import { useParams } from 'react-router-dom';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
 import FormInput from '../../components/resume/FormInput';
 import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
-import { useResume } from '../../context/ResumeContext'; // Import context
-
-// ExperienceItem component remains largely the same, but receives its functions from the main component
-const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave, onAiWrite }) => {
-
+import { useResume } from '../../context/ResumeContext';
+import FeedbackModal from '../../components/common/FeedbackModal';
+// --- ExperienceItem Component ---
+// REMOVE the onSubmit handler and the SaveButton from this component
+const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite }) => {
     const companyName = experience.company || 'THE COMPANY';
     const remainingAiWrites = 3 - (experience.aiClickCount || 0);
 
@@ -23,7 +24,8 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave, onAiWri
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
             </div>
-            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onSave(experience.id); }}>
+            {/* REMOVED onSubmit from form */}
+            <form className="space-y-6">
                 <FormInput label={`WHAT WAS YOUR ROLE AT ${companyName}? *`} name="role" value={experience.role} onChange={(e) => onUpdate(experience.id, { ...experience, role: e.target.value })} placeholder={'Data Scientist'} />
                 <FormInput label="FOR WHICH COMPANY DID YOU WORK? *" name="company" value={experience.company} onChange={(e) => onUpdate(experience.id, { ...experience, company: e.target.value })} placeholder={'Google'} />
 
@@ -73,18 +75,24 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onSave, onAiWri
                     />
                 </div>
 
+                {/* --- REMOVED INDIVIDUAL SAVE BUTTON --- */}
+                {/*
                 <div className="flex justify-end">
                     <SaveButton type="submit">SAVE TO EXPERIENCE</SaveButton>
                 </div>
+                */}
             </form>
         </div>
     );
 };
 
+
+// --- Experience Component (Main) ---
 const Experience = () => {
     const { experiences, setExperiences, addExperience } = useResume();
-    const { resumeId } = useParams(); // Get resumeId from the URL
-
+    const { resumeId } = useParams();
+    const [isSaving, setIsSaving] = useState(false); // Add saving state
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
     const updateExperience = useCallback((id, updatedData) => {
         setExperiences(currentExperiences =>
             currentExperiences.map(exp => (exp.id === id ? updatedData : exp))
@@ -93,57 +101,116 @@ const Experience = () => {
 
     const deleteExperience = (id) => {
         if (experiences.length > 1) {
-            // Here you would also add a fetch call to a `delete_experience.php` script
             setExperiences(experiences.filter(exp => exp.id !== id));
         } else {
-            alert("You must have at least one experience entry.");
+            setModalInfo({
+                isOpen: true,
+                title: 'Action Not Allowed',
+                message: 'You must have at least one experience entry.',
+                isError: true
+            });
         }
     };
 
-    const saveExperience = async (id) => {
+    // --- NEW FUNCTION: saveAllExperiences ---
+    const saveAllExperiences = async () => {
         if (!resumeId) {
-            alert("Error: Cannot save experience without a resume ID.");
+            setModalInfo({
+                isOpen: true,
+                title: 'Save Error',
+                message: 'Cannot save experience without a resume ID.',
+                isError: true
+            });
             return;
         }
-
-        const experienceToSave = experiences.find(exp => exp.id === id);
+        if (isSaving) return; // Prevent double clicks
+        setIsSaving(true);
+        let saveErrors = 0;
+        const savePromises = experiences.map(exp => {
+            // Only save if it has a role or company (basic check for non-empty entry)
+            if (exp.role || exp.company) {
+                return fetch('https://renaisons.com/api/save_experience.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...exp, resume_id: resumeId }),
+                })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.status === 'success' && result.experience_id && exp.id !== result.experience_id) {
+                            // Return the update needed for this experience
+                            return { oldId: exp.id, newId: result.experience_id };
+                        } else if (result.status !== 'success') {
+                            // Log errors for individual saves but continue
+                            console.error(`Error saving experience "${exp.role || 'New'}": ${result.message}`);
+                            // Optionally collect errors to show user later
+                        }
+                        return null; // No update needed or error occurred
+                    })
+                    .catch(error => {
+                        console.error(`Network error saving experience "${exp.role || 'New'}":`, error);
+                        // Optionally collect errors
+                        return null;
+                    });
+            }
+            return Promise.resolve(null); // Resolve immediately for empty experiences
+        });
 
         try {
-            const response = await fetch('https://renaisons.com/api/save_experience.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ...experienceToSave,
-                    resume_id: resumeId // Add the resume_id
-                }),
-            });
+            const results = await Promise.all(savePromises);
 
-            const result = await response.json();
+            // Update local state with new IDs from the database
+            const updates = results.filter(Boolean); // Filter out nulls
+            if (updates.length > 0) {
+                setExperiences(currentExperiences =>
+                    currentExperiences.map(exp => {
+                        const update = updates.find(u => u.oldId === exp.id);
+                        return update ? { ...exp, id: update.newId } : exp;
+                    })
+                );
+            }
 
-            if (result.status === 'success') {
-                // If it was a new experience, the server sends back the new database ID
-                if (result.experience_id) {
-                    // Update the temporary frontend ID with the real one from the database
-                    updateExperience(id, { ...experienceToSave, id: result.experience_id });
-                }
-                alert(`${experienceToSave.role || 'Experience'} saved!`);
+            // --- REPLACE ALERTS WITH MODAL ---
+            if (saveErrors > 0) {
+                setModalInfo({
+                    isOpen: true,
+                    title: 'Save Complete (with errors)',
+                    message: `Successfully saved ${experiences.length - saveErrors} entries. ${saveErrors} entries failed to save. Please check console for details.`,
+                    isError: true
+                });
             } else {
-                alert('Error saving experience: ' + result.message);
+                setModalInfo({
+                    isOpen: true,
+                    title: 'Success!',
+                    message: 'All experience entries saved successfully.',
+                    isError: false // This will show the green/blue success style
+                });
             }
         } catch (error) {
-            console.error('Failed to save experience:', error);
-            alert('An error occurred. Please try again.');
+            setModalInfo({
+                isOpen: true,
+                title: 'Critical Error',
+                message: 'A network error occurred while saving. Please check your connection and try again.',
+                isError: true
+            });
+            console.error('Failed to save experiences:', error);
+        } finally {
+            setIsSaving(false);
         }
     };
+    // --- END NEW FUNCTION ---
 
     const handleAiWrite = (id) => {
+        // AI write logic remains the same
         const experienceToUpdate = experiences.find(exp => exp.id === id);
         const currentClickCount = experienceToUpdate.aiClickCount || 0;
 
         if (currentClickCount >= 3) {
-            alert("AI suggestion limit reached for this item.");
+            setModalInfo({
+                isOpen: true,
+                title: 'AI Limit Reached',
+                message: 'AI suggestion limit reached for this item.',
+                isError: true
+            });
             return;
         }
 
@@ -164,23 +231,37 @@ const Experience = () => {
 
     return (
         <>
+            {modalInfo.isOpen && (
+                <FeedbackModal
+                    title={modalInfo.title}
+                    message={modalInfo.message}
+                    isError={modalInfo.isError}
+                    onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })}
+                />
+            )}
             {experiences.map((exp, index) => (
                 <ExperienceItem
-                    key={exp.id}
+                    key={exp.id} // Use the ID as key
                     experience={exp}
                     index={index}
                     onUpdate={updateExperience}
                     onDelete={deleteExperience}
-                    onSave={saveExperience}
+                    // Removed onSave prop
                     onAiWrite={handleAiWrite}
                 />
             ))}
             <AddItemButton onClick={addExperience}>
                 ADD ANOTHER EXPERIENCE
             </AddItemButton>
+
+            {/* --- ADDED MAIN SAVE BUTTON --- */}
+            <div className="flex justify-center mt-8 pt-6 border-t border-gray-700">
+                <SaveButton onClick={saveAllExperiences} disabled={isSaving}>
+                    {isSaving ? 'SAVING ALL...' : 'SAVE ALL EXPERIENCES'}
+                </SaveButton>
+            </div>
         </>
     );
 };
 
 export default Experience;
-

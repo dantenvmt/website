@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate, useParams, Outlet } from 'react-rout
 import UpdateResumeModal from './UpdateResumeModal';
 import { useResume } from '../../context/ResumeContext';
 import ConfirmModal from '../common/ConfirmModal';
+import FeedbackModal from '../common/FeedbackModal'; // <-- 1. IMPORT FeedbackModal
 
 const EditorLayout = () => {
 
@@ -12,19 +13,15 @@ const EditorLayout = () => {
 
     const {
         setContact, setSummary, setSkills, setExperiences,
-        setEducations, setAwards, setCertifications, setProjects, resetResume
+        setEducations, setAwards, setCertifications, setProjects
     } = useResume();
-
-    // --- THIS IS THE FIX ---
-    // We use useState to "latch" the isNewAiResume flag on the *first render*.
-    // This component will now *remember* it's a new AI resume,
-    // even if the location.state changes on subsequent tab clicks.
     const [isNewAi] = useState(location.state?.isNewAiResume || false);
     // ----------------------
-
     const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Loading...');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    // State for the "Are you sure?" confirmation modal
     const [modalState, setModalState] = useState({
         isOpen: false,
         title: '',
@@ -33,8 +30,15 @@ const EditorLayout = () => {
         confirmText: 'Confirm'
     });
 
+    // --- 2. ADD STATE FOR THE FEEDBACK MODAL ---
+    const [feedbackModalState, setFeedbackModalState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        isError: false
+    });
+
     // --- HOOK 1: DATA LOADING ---
-    // This hook runs when the page loads. It decides if it needs to fetch.
     useEffect(() => {
         const fetchResumeData = async () => {
             try {
@@ -45,12 +49,20 @@ const EditorLayout = () => {
 
                 if (result.status === 'success' && result.data) {
                     const { data } = result;
-
+                    setResumeName(data.resume_name || 'Untitled Resume');
                     const contactToSet = data.contact_info || {};
                     if (contactToSet.full_name) {
                         contactToSet.fullName = contactToSet.full_name;
                         delete contactToSet.full_name;
                     }
+
+                    // --- This is important for the FinalResumePage fix ---
+                    // Make sure the API-fetched name gets into the contact object
+                    // if there isn't one already.
+                    if (!contactToSet.fullName) {
+                        contactToSet.fullName = data.resume_name || '';
+                    }
+                    // ---
 
                     setContact(contactToSet);
                     setSummary(data.summary?.summaries_description || '');
@@ -62,21 +74,16 @@ const EditorLayout = () => {
                     setProjects(data.projects || []);
                 } else {
                     console.error("Failed to fetch resume details:", result.message);
+                    setResumeName('Error Loading Name');
                 }
             } catch (error) {
                 console.error("Error fetching resume data:", error);
             }
         };
-
-        // If it's a new AI resume (using our "latched" state), DO NOT fetch.
-        // Otherwise, fetch the data from the database.
         if (resumeId && !isNewAi) {
             fetchResumeData();
         }
-
     }, [
-        // This effect now only runs when resumeId or isNewAi changes.
-        // Since isNewAi is latched, this should only run ONCE on load.
         resumeId,
         isNewAi,
         navigate,
@@ -90,15 +97,6 @@ const EditorLayout = () => {
         setProjects
     ]);
 
-    // --- HOOK 2: CLEANUP ---
-    // This separate hook runs only once to set up the cleanup.
-    // It will *only* call resetResume() when you navigate *away* from EditorLayout.
-    useEffect(() => {
-        // The return function is the cleanup
-        return () => {
-            resetResume();
-        };
-    }, [resetResume]); // This dependency is stable
 
 
     const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
@@ -122,8 +120,9 @@ const EditorLayout = () => {
         });
     };
 
+    // --- 3. UPDATE performDelete TO USE FEEDBACK MODAL ---
     const performDelete = async () => {
-        setModalState({ isOpen: false });
+        setModalState({ isOpen: false }); // Close the "are you sure" modal
         try {
             const response = await fetch('https://renaisons.com/api/delete_resume.php', {
                 method: 'POST',
@@ -134,21 +133,52 @@ const EditorLayout = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                alert(`Resume "${resumeName}" deleted.`);
-                navigate('/resume');
+                // --- REPLACE ALERT ---
+                setFeedbackModalState({
+                    isOpen: true,
+                    title: 'Success',
+                    message: `Resume "${resumeName}" has been deleted.`,
+                    isError: false
+                });
+                // ---
             } else {
+                // --- REPLACE ALERT ---
                 console.error('API Error:', result.message || 'Unknown error');
-                alert(`Error deleting resume: ${result.message || 'Please try again.'}`);
+                setFeedbackModalState({
+                    isOpen: true,
+                    title: 'Delete Error',
+                    message: result.message || 'Please try again.',
+                    isError: true
+                });
+                // ---
             }
         } catch (error) {
+            // --- REPLACE ALERT ---
             console.error('Failed to delete resume:', error);
-            alert('A network error occurred while deleting the resume.');
+            setFeedbackModalState({
+                isOpen: true,
+                title: 'Network Error',
+                message: 'A network error occurred while deleting the resume.',
+                isError: true
+            });
+            // ---
         }
     };
 
     const handleModalClose = () => {
         setModalState({ isOpen: false });
     };
+
+    // --- 4. ADD HANDLER TO CLOSE FEEDBACK MODAL ---
+    const handleFeedbackModalClose = () => {
+        // If the delete was successful (not an error), navigate away
+        if (!feedbackModalState.isError && feedbackModalState.title === 'Success') {
+            navigate('/resume');
+        }
+        // Always close the modal
+        setFeedbackModalState({ isOpen: false, title: '', message: '', isError: false });
+    };
+
 
     return (
         <>
@@ -184,8 +214,8 @@ const EditorLayout = () => {
                                     <NavLink
                                         key={item}
                                         to={`/resume/${resumeId}/${item.toLowerCase()}`}
-                                        // Pass the *original* location state to persist the flag
-                                        state={location.state}
+                                        // Pass the *original* location state, plus the current resumeName
+                                        state={{ ...location.state, resumeName: resumeName }}
                                         className={({ isActive }) =>
                                             `px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${isActive
                                                 ? 'bg-blue-600 text-white'
@@ -220,6 +250,16 @@ const EditorLayout = () => {
                 message={modalState.message}
                 confirmText={modalState.confirmText}
             />
+
+            {/* --- 5. RENDER THE FEEDBACK MODAL --- */}
+            {feedbackModalState.isOpen && (
+                <FeedbackModal
+                    title={feedbackModalState.title}
+                    message={feedbackModalState.message}
+                    isError={feedbackModalState.isError}
+                    onClose={handleFeedbackModalClose}
+                />
+            )}
         </>
     );
 };

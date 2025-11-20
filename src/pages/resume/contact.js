@@ -5,26 +5,11 @@ import FormInput from '../../components/resume/FormInput';
 import Toggle from '../../components/resume/Toggle';
 import FormSelect from '../../components/resume/FormSelect';
 import { useResume } from '../../context/ResumeContext';
+import FeedbackModal from '../../components/common/FeedbackModal';
 
-// Modal component for displaying validation errors and success messages
-const FeedbackModal = ({ title, message, onClose, isError }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-        <div className="bg-neutral-800 rounded-lg p-8 max-w-sm w-full mx-4">
-            <h3 className={`text-lg font-bold mb-4 ${isError ? 'text-red-500' : 'text-green-500'}`}>{title}</h3>
-            <p className="text-neutral-300 mb-6">{message}</p>
-            <button
-                onClick={onClose}
-                className={`w-full text-white font-semibold py-2 px-4 rounded-md transition-colors ${isError ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-            >
-                OK
-            </button>
-        </div>
-    </div>
-);
 
 const Contact = () => {
     const { contact, setContact, contactToggles, setContactToggles } = useResume();
-    console.log('Contact Page: Received contact data from context:', contact);
     const { resumeId } = useParams();
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
 

@@ -1,7 +1,22 @@
+// src/components/resume/CreateResumeModal.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
 
+const formatDescriptionToBullets = (text) => {
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        return '• '; // Default bullet for an empty field
+    }
+
+    // This regex splits text into sentences, keeping the punctuation
+    const sentences = text.match(/[^.!?]+[.!?]*/g) || [];
+
+    return sentences
+        .map(sentence => sentence.trim()) // Trim whitespace
+        .filter(sentence => sentence.length > 0) // Remove empty strings
+        .map(sentence => '• ' + sentence) // Add bullet prefix
+        .join('\n'); // Join with newlines
+};
 const CreateResumeModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
 
@@ -56,7 +71,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         }
     };
 
-    // This function includes all fixes: data mapping, isNewAiResume flag
+    // --- UPDATED AI Build Handler ---
     const handleAiBuild = async (e) => {
         e.preventDefault();
         const trimmedName = resumeName.trim();
@@ -92,19 +107,83 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             // 2. GET THE CLEAN JSON
             const parsedResult = await parseResponse.json();
 
-            // 2b. FIX DATA MISMATCHES
+            // --- START MAPPING SECTION ---
+
+            // --- Contact Mapping (as before) ---
             const contactData = {
-                ...initialContact, // This is the OBJECT
+                ...initialContact,
                 ...parsedResult.contact,
                 fullName: parsedResult.contact.name || ''
             };
 
+            // --- Skills Mapping (Updated for array of strings) ---
             let skillsData = '';
             if (Array.isArray(parsedResult.skills)) {
+                // Join the array items, each on its own line for better readability if needed, or comma-separated
                 skillsData = parsedResult.skills.join(', ');
             } else {
-                skillsData = parsedResult.skills || '';
+                skillsData = parsedResult.skills || ''; // Fallback if it's not an array
             }
+
+            // --- Experience Mapping (Updated for 'title' and bullet formatting) ---
+            const experiencesData = (parsedResult.experiences || []).map(exp => ({
+                ...initialExperiences()[0],
+                id: Date.now() + Math.random(),
+                role: exp.title || exp.role || '', // Use 'title' from new JSON
+                company: exp.company || '',
+                startDate: exp.startDate || exp.start_date || '', // Use 'startDate' from new JSON
+                endDate: exp.endDate || exp.end_date || '', // Use 'endDate' from new JSON
+                isCurrent: exp.is_current || exp.isCurrent || (String(exp.endDate).toLowerCase() === 'present'),
+                location: exp.location || '',
+                bullets: formatDescriptionToBullets(exp.description || exp.bullets), // Use the new bullet formatter
+                aiUsesLeft: 3
+            }));
+
+            // --- Education Mapping (Updated for bullet formatting) ---
+            const educationsData = (parsedResult.educations || []).map(edu => ({
+                ...initialEducations()[0],
+                id: Date.now() + Math.random(),
+                degree: edu.degree || '',
+                school: edu.school || '',
+                startDate: edu.startDate || edu.start_date || '',
+                endDate: edu.endDate || edu.end_date || '',
+                location: edu.location || '',
+                bullets: formatDescriptionToBullets(edu.description || edu.bullets), // Use the new bullet formatter
+                minor: edu.minor || '',
+                gpa: edu.gpa || ''
+            }));
+
+            // --- Project Mapping (Updated for 'description' and bullet formatting) ---
+            const projectsData = (parsedResult.projects || []).map(proj => ({
+                ...initialProjects()[0],
+                id: Date.now() + Math.random(),
+                name: proj.name || '',
+                date: proj.date || '', // Use 'date' from new JSON
+                relevance: formatDescriptionToBullets(proj.description || proj.relevance) // Use new bullet formatter
+            }));
+
+            // --- Certification Mapping (Updated for 'orginization' typo and bullet formatting) ---
+            const certificationsData = (parsedResult.certifications || []).map(cert => ({
+                ...initialCertifications()[0],
+                id: Date.now() + Math.random(),
+                name: cert.name || '',
+                organization: cert.organization || cert.orginization || '', // Handle 'orginization' typo from parser
+                date: cert.date || '',
+                relevance: formatDescriptionToBullets(cert.description || cert.relevance) // Use new bullet formatter
+            }));
+
+            // --- Award Mapping (Updated for 'orginization' typo and bullet formatting) ---
+            const awardsData = (parsedResult.awards || []).map(award => ({
+                ...initialAwards()[0],
+                id: Date.now() + Math.random(),
+                name: award.name || '',
+                organization: award.organization || award.orginization || '', // Handle 'orginization' typo from parser
+                date: award.date || '',
+                relevance: formatDescriptionToBullets(award.description || award.relevance) // Use new bullet formatter
+            }));
+
+            // --- END MAPPING SECTION ---
+
 
             // 3. CREATE THE RESUME ENTRY IN DB
             const createResponse = await fetch('https://renaisons.com/api/create_resume.php', {
@@ -116,17 +195,16 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const createResult = await createResponse.json();
 
             if (createResult.status === 'success' && createResult.resume_id) {
-                // DO NOT resetResume() here. Let the cleanup hook handle it.
 
-                // 4. POPULATE THE CONTEXT
+                // 4. POPULATE THE CONTEXT WITH MAPPED DATA
                 setContact(contactData);
-                setSummary(parsedResult.summary || '');
+                setSummary(parsedResult.summary || ''); // Summary is a single string, no formatting needed
                 setSkills(skillsData);
-                setExperiences(parsedResult.experiences && parsedResult.experiences.length > 0 ? parsedResult.experiences : initialExperiences());
-                setEducations(parsedResult.educations && parsedResult.educations.length > 0 ? parsedResult.educations : initialEducations());
-                setProjects(parsedResult.projects && parsedResult.projects.length > 0 ? parsedResult.projects : initialProjects());
-                setAwards(parsedResult.awards && parsedResult.awards.length > 0 ? parsedResult.awards : initialAwards());
-                setCertifications(parsedResult.certifications && parsedResult.certifications.length > 0 ? parsedResult.certifications : initialCertifications());
+                setExperiences(experiencesData.length > 0 ? experiencesData : initialExperiences());
+                setEducations(educationsData.length > 0 ? educationsData : initialEducations());
+                setProjects(projectsData.length > 0 ? projectsData : initialProjects());
+                setAwards(awardsData.length > 0 ? awardsData : initialAwards());
+                setCertifications(certificationsData.length > 0 ? certificationsData : initialCertifications());
                 setJobDescription(jobInput);
 
                 // 5. NAVIGATE *WITH* THE FLAG
@@ -146,7 +224,6 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             setIsLoading(false);
         }
     };
-
 
     const handleClose = () => {
         setStep(1);

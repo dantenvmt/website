@@ -104,6 +104,7 @@ const UserStatusPage = () => {
         const file = event.target.files[0];
         if (file) {
             // Validate file extension
+            // *** MODIFICATION: EXPANDED ALLOWED FILE EXTENSIONS ***
             const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
             const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             if (!allowedExtensions.includes(fileExtension)) {
@@ -268,19 +269,40 @@ const UserStatusPage = () => {
         if (doc.status === 'pending' || doc.status === 'rejected') {
             if (doc.document_type === 'contract') {
                 // Specific URL for downloading blank contracts
-                downloadUrl = `https://renaisons.com/api/download_contract.php`; // Adjust if needed
-                downloadText = '1. Download Blank Contract';
+                // This link should ideally point to the initial blank contract uploaded by admin
+                // For now, we use the general download endpoint if an admin *did* upload a file for this pending doc.
+                // Assuming the backend handles retrieving the *initial* blank file path if it exists for pending contracts.
+
+                // If the user has a submitted_file_path (meaning a previous rejected file), they view that.
+                if (doc.submitted_file_path) {
+                    downloadUrl = `https://renaisons.com/api/download_user_document.php?doc_id=${docId}`;
+                    downloadText = doc.status === 'rejected' ? 'View Rejected File' : 'View Current File';
+                } else if (doc.admin_notes && doc.document_type === 'contract') {
+                    // Assuming admin_notes indicates a document *was* attached by admin (the blank one)
+                    // If your system stores blank contract in a dedicated field or separate document entry, this URL needs adjustment.
+                    // For simplicity, we fall back to a generic 'download_contract' endpoint for the blank template.
+                    downloadUrl = `https://renaisons.com/api/download_contract.php?doc_id=${docId}`; // Assuming this gets the blank version
+                    downloadText = 'Download Document';
+                } else {
+                    downloadText = ''; // No file to download yet
+                }
             } else if (doc.submitted_file_path) { // For rejected 'other' documents that had a previous submission
                 downloadUrl = `https://renaisons.com/api/download_user_document.php?doc_id=${docId}`;
                 downloadText = 'View Rejected File';
             } else { // For pending 'other' documents with no initial file submitted
                 downloadText = ''; // No file to download yet
             }
-        } else if (doc.status === 'submitted' || doc.status === 'approved') {
-            // URL to download the file the user submitted
+        } else if (doc.status === 'submitted') {
+            // URL to download the file the user submitted (if status is submitted)
             downloadUrl = `https://renaisons.com/api/download_user_document.php?doc_id=${docId}`;
-            downloadText = 'View Submitted/Approved File';
+            downloadText = 'View Submitted File';
+        } else if (doc.status === 'approved') {
+            // *** MODIFICATION: FINAL SIGNED CONTRACT LOGIC ***
+            // When approved, the submitted_file_path now points to the admin's final signed file.
+            downloadUrl = `https://renaisons.com/api/download_user_document.php?doc_id=${docId}`;
+            downloadText = doc.document_type === 'contract' ? 'View Final Signed Contract' : 'View Approved File';
         }
+
 
         return (
             <div key={docId} className="p-4 border border-neutral-700 rounded-md bg-neutral-900/50">
@@ -346,7 +368,7 @@ const UserStatusPage = () => {
                                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap flex-shrink-0"
                             >
                                 {/* Show dynamic text during upload */}
-                                {message.type === 'info' && filesToUpload[docId] ? 'Uploading...' : '2. Submit File'}
+                                {message.type === 'info' && filesToUpload[docId] ? 'Uploading...' : 'Submit File'}
                             </button>
                         </div>
                     </div>
@@ -365,14 +387,14 @@ const UserStatusPage = () => {
                 {/* Message and link for approved documents */}
                 {doc.status === 'approved' && (
                     <div className="mt-2 border-t border-neutral-700 pt-3">
-                        <p className="text-sm text-green-300 mb-2">Document approved.</p>
+                        <p className="text-sm text-green-300 mb-2">{doc.document_type === 'contract' ? 'Contract approved and countersigned by admin.' : 'Document approved.'}</p>
                         <a
                             href={downloadUrl} // Link to view the approved file
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
                         >
-                            View Approved File
+                            {downloadText}
                         </a>
                     </div>
                 )}
@@ -504,4 +526,3 @@ const UserStatusPage = () => {
 };
 
 export default UserStatusPage;
-

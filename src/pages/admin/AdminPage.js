@@ -18,7 +18,7 @@ const STEP_DEFINITIONS = {
 };
 const MAX_STEP = Math.max(...Object.keys(STEP_DEFINITIONS).map(Number));
 
-// --- Reusable Input Components (Unchanged) ---
+// --- Reusable Input Components (Updated) ---
 const AdminFormInput = ({ label, name, type = 'text', value, onChange, required = false, placeholder = '' }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-1">
@@ -36,7 +36,9 @@ const AdminFormInput = ({ label, name, type = 'text', value, onChange, required 
         />
     </div>
 );
-const AdminFileInput = React.forwardRef(({ label, name, onChange, required = false, fileName, accept = ".pdf,.doc,.docx" }, ref) => (
+
+// *** MODIFICATION 1: EXPANDED FILE TYPES FOR ADMIN UPLOAD ***
+const AdminFileInput = React.forwardRef(({ label, name, onChange, required = false, fileName, accept = ".pdf,.doc,.docx,.jpg,.jpeg,.png" }, ref) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-neutral-300 mb-2">
             {label}{required && <span className="text-red-500">*</span>}
@@ -51,7 +53,7 @@ const AdminFileInput = React.forwardRef(({ label, name, onChange, required = fal
                 {fileName ? (
                     <p className="text-xs text-green-400 pt-1">{fileName}</p>
                 ) : (
-                    <p className="text-xs text-neutral-500 pt-1">PDF, DOC, DOCX up to 10MB</p>
+                    <p className="text-xs text-neutral-500 pt-1">PDF, DOC, DOCX, JPG, JPEG, PNG up to 10MB</p>
                 )}
             </div>
         </div>
@@ -75,6 +77,8 @@ const formatNoteTimestamp = (timestamp) => {
 // --- Main Admin Page Component ---
 const AdminPage = () => {
     // --- State ---
+    const [finalContractFile, setFinalContractFile] = useState({});
+    const finalContractInputRefs = useRef({});
     const { user: adminUser } = useAuth();
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
@@ -207,7 +211,137 @@ const AdminPage = () => {
         }
     };
     // --- End of Create User Handlers ---
+    // --- Handlers for Final Contract Upload ---
 
+    // Handle file change for the specific final contract input
+    const handleFinalContractFileChange = (docId, event) => {
+        const file = event.target.files[0];
+        setContractMessage({ type: '', text: '' });
+        if (file) {
+            // Use same validation as other uploads (PDF, DOC, DOCX, JPG, JPEG, PNG)
+            const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+            const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+                setContractMessage({ type: 'error', text: 'Invalid file type. Please upload PDF, DOC, DOCX, JPG, JPEG, or PNG.' });
+                setFinalContractFile(prev => ({ ...prev, [docId]: null }));
+                if (finalContractInputRefs.current[docId]) finalContractInputRefs.current[docId].value = '';
+                return;
+            }
+            setFinalContractFile(prev => ({ ...prev, [docId]: file }));
+        } else {
+            setFinalContractFile(prev => {
+                const newState = { ...prev };
+                delete newState[docId];
+                return newState;
+            });
+        }
+    };
+
+    // The handler that uploads the final signed contract and sets status to 'approved'
+    const handleFinalContractUpload = async (userDocumentId) => {
+        const file = finalContractFile[userDocumentId];
+        if (!file) {
+            setContractMessage({ type: 'error', text: 'Please select the final signed contract file first.' });
+            return;
+        }
+
+        const contract = assignedRequirements.find(r => r.user_document_id === userDocumentId);
+        if (!contract) return;
+
+        setIsUpdatingStatus(userDocumentId); // Set loading state for specific item
+        setContractMessage({ type: 'info', text: `Approving and uploading final contract: ${contract.document_name}...` });
+
+        const formData = new FormData();
+        formData.append('user_document_id', userDocumentId);
+        formData.append('finalSignedFile', file); // Use the name expected by the PHP script
+
+        try {
+            // Call the new dedicated endpoint
+            const response = await fetch('https://renaisons.com/api/upload_final_contract.php', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            const result = await response.json();
+
+            if (response.ok && result.status === 'success') {
+                setContractMessage({ type: 'success', text: `Contract ${contract.document_name} approved, final copy uploaded, and user notified!` });
+                // Clear state and input field
+                setFinalContractFile(prev => { const newState = { ...prev }; delete newState[userDocumentId]; return newState; });
+                if (finalContractInputRefs.current[userDocumentId]) finalContractInputRefs.current[userDocumentId].value = '';
+                fetchUserRequirements(); // Refresh to show 'approved' status
+            } else {
+                setContractMessage({ type: 'error', text: `Final upload failed: ${result.message || 'Server error'}` });
+            }
+        } catch (error) {
+            console.error("Error uploading final contract:", error);
+            setContractMessage({ type: 'error', text: 'An error occurred during final contract upload.' });
+        } finally {
+            setIsUpdatingStatus(null);
+        }
+    };
+
+    // --- Original handleUpdateStatus (Modified to SKIP contract approval) ---
+    // This function will now only handle REJECTION for contracts and all actions for 'other' documents.
+    const handleUpdateStatus = async (userDocumentId, newStatus) => {
+        const contract = assignedRequirements.find(r => r.user_document_id === userDocumentId);
+
+        // --- NEW LOGIC: CONTRACT APPROVAL MUST GO THROUGH FINAL UPLOAD ---
+        if (contract && contract.document_type === 'contract' && newStatus === 'approved') {
+            setContractMessage({ type: 'error', text: 'To approve a contract, you must upload the final fully-signed document using the dedicated form below the document name.' });
+            return;
+        }
+        // --- END NEW LOGIC ---
+
+        let notes = null;
+        // ... (rest of the handleUpdateStatus remains the same for rejection and other documents)
+        // ... (Logic for rejection notes, API call to update_requirement_status.php, etc.)
+
+        // Note: The rest of this function remains for rejection (contracts) and all updates (other documents).
+
+        let notesValue = null;
+        if (newStatus === 'rejected') {
+            notesValue = rejectionNotes[userDocumentId] || '';
+        } else if (newStatus === 'approved') {
+            const req = assignedRequirements.find(r => r.user_document_id === userDocumentId);
+            notesValue = `${req?.document_name || 'Document'} approved`; // Default approved note
+        }
+
+        const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
+
+        // Require notes only for rejection
+        if (newStatus === 'rejected' && !notesValue.trim()) {
+            setMessage({ type: 'error', text: 'Please enter rejection notes.' });
+            return;
+        }
+
+        setIsUpdatingStatus(userDocumentId);
+        setAssignmentMessage({ type: '', text: '' });
+        setContractMessage({ type: '', text: '' });
+
+        try {
+            const response = await fetch('https://renaisons.com/api/update_requirement_status.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_document_id: userDocumentId, new_status: newStatus, admin_notes: notesValue }),
+                credentials: 'include'
+            });
+            const result = await response.json();
+            if (response.ok && result.status === 'success') {
+                setMessage({ type: 'success', text: `Status updated to ${newStatus}.` });
+                setRejectionNotes(prev => ({ ...prev, [userDocumentId]: undefined }));
+                fetchUserRequirements();
+            } else {
+                setMessage({ type: 'error', text: `Failed to update status: ${result.message}` });
+            }
+        } catch (error) {
+            console.error("Error updating status:", error);
+            setMessage({ type: 'error', text: 'An error occurred while updating status.' });
+        } finally {
+            setIsUpdatingStatus(null);
+        }
+    };
     // --- Modal Controls (Unchanged) ---
     const handleModalClose = () => {
         setModalState({ isOpen: false });
@@ -274,51 +408,6 @@ const AdminPage = () => {
         } catch (error) {
             console.error("Error removing requirement:", error);
             setMessage({ type: 'error', text: 'An error occurred while removing the requirement.' });
-        }
-    };
-    const handleUpdateStatus = async (userDocumentId, newStatus) => {
-        let notes = null;
-        if (newStatus === 'rejected') {
-            notes = rejectionNotes[userDocumentId] || '';
-        } else if (newStatus === 'approved') {
-            const req = assignedRequirements.find(r => r.user_document_id === userDocumentId);
-            notes = `${req?.document_name || 'Document'} approved`; // Default approved note
-        }
-
-        const setMessage = (selectedUserCurrentStep === 1) ? setContractMessage : setAssignmentMessage;
-
-        // Require notes only for rejection
-        if (newStatus === 'rejected' && !notes.trim()) {
-            setMessage({ type: 'error', text: 'Please enter rejection notes.' });
-            return;
-        }
-
-        setIsUpdatingStatus(userDocumentId); // Set loading state for specific item
-        // Clear general messages before starting update
-        setAssignmentMessage({ type: '', text: '' });
-        setContractMessage({ type: '', text: '' });
-
-        try {
-            const response = await fetch('https://renaisons.com/api/update_requirement_status.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_document_id: userDocumentId, new_status: newStatus, admin_notes: notes }),
-                credentials: 'include'
-            });
-            const result = await response.json();
-            if (response.ok && result.status === 'success') {
-                setMessage({ type: 'success', text: `Status updated to ${newStatus}.` });
-                // Clear rejection note input for this item after successful update
-                setRejectionNotes(prev => ({ ...prev, [userDocumentId]: undefined }));
-                fetchUserRequirements(); // Refresh requirements list
-            } else {
-                setMessage({ type: 'error', text: `Failed to update status: ${result.message}` });
-            }
-        } catch (error) {
-            console.error("Error updating status:", error);
-            setMessage({ type: 'error', text: 'An error occurred while updating status.' });
-        } finally {
-            setIsUpdatingStatus(null); // Clear loading state for specific item
         }
     };
     const handleRejectionNoteChange = (userDocumentId, value) => {
@@ -431,7 +520,7 @@ const AdminPage = () => {
     // --- End Delete Step Note Handler ---
 
 
-    // --- Handler for Move to Next Step ---
+    // --- Handler for Move to Next Step (Unchanged) ---
     const handleMoveToNextStep = async () => {
         if (!selectedUserId || isUpdatingStep || selectedUserCurrentStep >= MAX_STEP) return;
         // Check if all contracts are approved before moving from step 1
@@ -481,16 +570,17 @@ const AdminPage = () => {
     };
     // --- End Move Step Handler ---
 
-    // --- Handlers for Contract Upload (Unchanged) ---
+    // --- Handlers for Contract Upload (Update to reflect expanded file types) ---
     const handleContractFileChange = (e) => {
         const file = e.target.files[0];
         setContractMessage({ type: '', text: '' });
         if (file) {
-            const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-            const allowedExtensions = ['.pdf', '.doc', '.docx'];
+            // *** MODIFICATION 2: UPDATED ALLOWED TYPES (match AdminFileInput) ***
+            const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+            const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
             const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(fileExtension)) {
-                setContractMessage({ type: 'error', text: 'Invalid file type. Please upload PDF, DOC, or DOCX.' });
+                setContractMessage({ type: 'error', text: 'Invalid file type. Please upload PDF, DOC, DOCX, JPG, JPEG, or PNG.' });
                 setContractFile(null); setContractFileName('');
                 if (contractInputRef.current) contractInputRef.current.value = '';
                 return;
@@ -502,21 +592,22 @@ const AdminPage = () => {
     };
     const handleContractUpload = async () => {
         if (!selectedUserId || !contractFile || !newContractName.trim()) {
-            setContractMessage({ type: 'error', text: 'Please select a user, choose a file, and enter a contract name.' });
+            setContractMessage({ type: 'error', text: 'Please select a user, choose a file, and enter a document name.' });
             return;
         }
         if (isUploadingContract) return;
         setIsUploadingContract(true);
-        setContractMessage({ type: 'info', text: 'Uploading contract...' });
+        setContractMessage({ type: 'info', text: 'Uploading document...' });
         const formData = new FormData();
         formData.append('userId', selectedUserId);
         formData.append('contractFile', contractFile);
         formData.append('document_name', newContractName.trim());
         try {
+            // Note: This endpoint is used for both blank and signed contracts based on context/naming.
             const response = await fetch('https://renaisons.com/api/upload_admin_contract.php', { method: 'POST', body: formData, credentials: 'include' });
             const result = await response.json();
             if (response.ok && result.status === 'success') {
-                setContractMessage({ type: 'success', text: `Contract "${newContractName.trim()}" uploaded successfully!` });
+                setContractMessage({ type: 'success', text: `Document "${newContractName.trim()}" uploaded successfully!` });
                 setContractFile(null); setContractFileName(''); setNewContractName('');
                 if (contractInputRef.current) contractInputRef.current.value = '';
                 fetchUserRequirements(); // Refresh requirements
@@ -571,7 +662,7 @@ const AdminPage = () => {
     // --- END: Handlers for Delete User ---
 
 
-    // --- Helper variables ---
+    // --- Helper variables (Unchanged) ---
     const currentStepName = STEP_DEFINITIONS[selectedUserCurrentStep] || 'Unknown Step';
     const nextStepName = STEP_DEFINITIONS[selectedUserCurrentStep + 1];
     const atMaxStep = selectedUserCurrentStep >= MAX_STEP;
@@ -735,16 +826,78 @@ const AdminPage = () => {
                                         <tbody className="bg-neutral-800 divide-y divide-neutral-700">
                                             {isLoadingRequirements && (<tr><td colSpan="4" className="text-center p-4 text-neutral-400">Loading contracts...</td></tr>)}
                                             {!isLoadingRequirements && step1Contracts.length === 0 && (<tr><td colSpan="4" className="text-center p-4 text-neutral-400">No contracts assigned/uploaded.</td></tr>)}
-                                            {!isLoadingRequirements && step1Contracts.map((contract) => (<tr key={contract.user_document_id}><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{contract.document_name}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${contract.status === 'approved' ? 'bg-green-800 text-green-100' : contract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' : contract.status === 'rejected' ? 'bg-red-800 text-red-100' : 'bg-gray-700 text-gray-100'}`}>{contract.status}</span></td><td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">{(contract.status === 'submitted' || contract.status === 'approved' || contract.status === 'rejected') ? (<a href={`https://renaisons.com/api/download_user_document.php?doc_id=${contract.user_document_id}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline mr-3">View File</a>) : (<span className="text-neutral-500 mr-3">No User File</span>)}{contract.status === 'submitted' && (<div className="flex flex-col sm:flex-row gap-2 items-start"><button onClick={() => handleUpdateStatus(contract.user_document_id, 'approved')} disabled={isUpdatingStatus === contract.user_document_id} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50">{isUpdatingStatus === contract.user_document_id ? '...' : 'Approve'}</button><div className="flex flex-col items-start w-full"><button onClick={() => handleUpdateStatus(contract.user_document_id, 'rejected')} disabled={isUpdatingStatus === contract.user_document_id} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50 mb-1">{isUpdatingStatus === contract.user_document_id ? '...' : 'Reject'}</button><textarea value={rejectionNotes[contract.user_document_id] || ''} onChange={(e) => handleRejectionNoteChange(contract.user_document_id, e.target.value)} placeholder="Rejection notes (required)" rows="2" className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white" /></div></div>)}{contract.admin_notes && (contract.status === 'rejected' || contract.status === 'approved') && (<p className={`text-xs mt-1 ${contract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>Notes: {contract.admin_notes}</p>)}{(contract.status === 'pending') && (<span className="text-neutral-500 text-xs">Awaiting User Upload</span>)}</td><td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium"><button onClick={() => handleRemoveRequirement(contract.user_document_id)} className="text-red-400 hover:text-red-600" title="Remove Contract">Remove</button></td></tr>))}
+                                            {!isLoadingRequirements && step1Contracts.map((contract) => (
+                                                <tr key={contract.user_document_id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{contract.document_name}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-300">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${contract.status === 'approved' ? 'bg-green-800 text-green-100' : contract.status === 'submitted' ? 'bg-yellow-800 text-yellow-100' : contract.status === 'rejected' ? 'bg-red-800 text-red-100' : 'bg-gray-700 text-gray-100'}`}>
+                                                            {contract.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-4 whitespace-nowrap text-sm space-y-2">
+                                                        {(contract.status === 'submitted' || contract.status === 'approved' || contract.status === 'rejected') ? (
+                                                            <a href={`https://renaisons.com/api/download_user_document.php?doc_id=${contract.user_document_id}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline mr-3">
+                                                                View {contract.status === 'approved' ? 'Final' : 'User Submitted'} File
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-neutral-500 mr-3">No User File</span>
+                                                        )}
+
+                                                        {/* --- MODIFICATION: REPLACE APPROVE BUTTON WITH FINAL UPLOAD FORM --- */}
+                                                        {contract.status === 'submitted' && (
+                                                            <div className="mt-3 p-3 bg-yellow-900/30 border border-yellow-700 rounded-md">
+                                                                <p className="text-xs font-semibold text-yellow-300 mb-2">UPLOAD FINAL SIGNED CONTRACT:</p>
+                                                                <div className="flex flex-col gap-2">
+                                                                    {/* File Input */}
+                                                                    <input
+                                                                        type="file"
+                                                                        id={`final-file-${contract.user_document_id}`}
+                                                                        name={`final-file-${contract.user_document_id}`}
+                                                                        ref={el => finalContractInputRefs.current[contract.user_document_id] = el}
+                                                                        onChange={(e) => handleFinalContractFileChange(contract.user_document_id, e)}
+                                                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                                        className="w-full text-xs text-neutral-300 file:mr-4 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-neutral-700 file:text-white hover:file:bg-neutral-600"
+                                                                        disabled={isUpdatingStatus === contract.user_document_id}
+                                                                    />
+                                                                    {/* Submit Button */}
+                                                                    <button
+                                                                        onClick={() => handleFinalContractUpload(contract.user_document_id)}
+                                                                        disabled={!finalContractFile[contract.user_document_id] || isUpdatingStatus === contract.user_document_id}
+                                                                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50"
+                                                                    >
+                                                                        {isUpdatingStatus === contract.user_document_id ? 'Uploading & Approving...' : 'Approve & Upload Final'}
+                                                                    </button>
+
+                                                                    {/* Reject Option */}
+                                                                    <div className="flex flex-col items-start w-full mt-2 border-t border-yellow-700 pt-2">
+                                                                        <button onClick={() => handleUpdateStatus(contract.user_document_id, 'rejected')} disabled={isUpdatingStatus === contract.user_document_id} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-xs rounded disabled:opacity-50 mb-1">
+                                                                            {isUpdatingStatus === contract.user_document_id ? '...' : 'Reject User File'}
+                                                                        </button>
+                                                                        <textarea value={rejectionNotes[contract.user_document_id] || ''} onChange={(e) => handleRejectionNoteChange(contract.user_document_id, e.target.value)} placeholder="Rejection notes (required)" rows="2" className="w-full text-xs bg-neutral-700 border border-neutral-600 rounded p-1 focus:ring-blue-500 focus:border-blue-500 text-white" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {/* --- END MODIFICATION --- */}
+
+                                                        {contract.admin_notes && (contract.status === 'rejected' || contract.status === 'approved') && (<p className={`text-xs mt-1 ${contract.status === 'rejected' ? 'text-red-300' : 'text-green-300'}`}>Notes: {contract.admin_notes}</p>)}
+                                                        {(contract.status === 'pending') && (<span className="text-neutral-500 text-xs">Awaiting User Upload</span>)}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                        <button onClick={() => handleRemoveRequirement(contract.user_document_id)} className="text-red-400 hover:text-red-600" title="Remove Contract">Remove</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
+                                {/* *** MODIFICATION 3: RENAME UPLOAD SECTION IN RENDER *** */}
                                 <div className="border-t border-neutral-700 pt-6">
-                                    <h4 className="text-md font-medium mb-2 text-neutral-300">Upload New Blank Contract for User</h4>
+                                    <h4 className="text-md font-medium mb-2 text-neutral-300">Upload New Document (e.g., Blank or Signed Contract)</h4>
                                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
-                                        <div className="flex-grow w-full"><AdminFormInput label="Contract Name" name="newContractName" value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="e.g., Master Service Agreement" required /></div>
-                                        <div className="flex-grow w-full"><AdminFileInput label="Contract File" name="contractFile" onChange={handleContractFileChange} fileName={contractFileName} required ref={contractInputRef} /></div>
-                                        <button type="button" onClick={handleContractUpload} disabled={isUploadingContract || !contractFile || !newContractName.trim()} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50 flex-shrink-0">{isUploadingContract ? 'Uploading...' : 'Upload Contract'}</button>
+                                        <div className="flex-grow w-full"><AdminFormInput label="Document Name" name="newContractName" value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="e.g., Master Service Agreement or Final Signed Contract" required /></div>
+                                        <div className="flex-grow w-full"><AdminFileInput label="Document File" name="contractFile" onChange={handleContractFileChange} fileName={contractFileName} required ref={contractInputRef} /></div>
+                                        <button type="button" onClick={handleContractUpload} disabled={isUploadingContract || !contractFile || !newContractName.trim()} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md whitespace-nowrap w-full md:w-auto disabled:opacity-50 flex-shrink-0">{isUploadingContract ? 'Uploading...' : 'Upload Document'}</button>
                                     </div>
                                 </div>
                             </div>
@@ -810,4 +963,3 @@ const AdminPage = () => {
 };
 
 export default AdminPage;
-

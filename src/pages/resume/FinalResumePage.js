@@ -380,7 +380,7 @@ const FinalResumePage = () => {
                     const items = section.id === 'projects' ? projects : section.id === 'certifications' ? certifications : awards;
                     items.forEach(item => {
                         // Check height for the header
-                        checkPageBreak(LINE_HEIGHT_HEADER);
+                        checkPageBreak(LINE_HEIGHT_HEADER + PARAGRAPH_SPACING);
 
                         // Render item header (Name, Org, Date)
                         doc.setFont('times', 'bold');

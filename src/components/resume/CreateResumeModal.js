@@ -3,20 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
 
-const formatDescriptionToBullets = (text) => {
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-        return '• '; // Default bullet for an empty field
-    }
 
-    // This regex splits text into sentences, keeping the punctuation
-    const sentences = text.match(/[^.!?]+[.!?]*/g) || [];
-
-    return sentences
-        .map(sentence => sentence.trim()) // Trim whitespace
-        .filter(sentence => sentence.length > 0) // Remove empty strings
-        .map(sentence => '• ' + sentence) // Add bullet prefix
-        .join('\n'); // Join with newlines
-};
 const CreateResumeModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
 
@@ -119,10 +106,10 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             // --- Skills Mapping (Updated for array of strings) ---
             let skillsData = '';
             if (Array.isArray(parsedResult.skills)) {
-                // Join the array items, each on its own line for better readability if needed, or comma-separated
-                skillsData = parsedResult.skills.join(', ');
+                // CHANGE THIS LINE: Join with newlines ('\n') instead of commas
+                skillsData = parsedResult.skills.join('\n');
             } else {
-                skillsData = parsedResult.skills || ''; // Fallback if it's not an array
+                skillsData = parsedResult.skills || '';
             }
 
             // --- Experience Mapping (Updated for 'title' and bullet formatting) ---
@@ -135,7 +122,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 endDate: exp.endDate || exp.end_date || '', // Use 'endDate' from new JSON
                 isCurrent: exp.is_current || exp.isCurrent || (String(exp.endDate).toLowerCase() === 'present'),
                 location: exp.location || '',
-                bullets: formatDescriptionToBullets(exp.description || exp.bullets), // Use the new bullet formatter
+                bullets: exp.bullets || exp.description || '', // Use the new bullet formatter
                 aiUsesLeft: 3
             }));
 
@@ -148,7 +135,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 startDate: edu.startDate || edu.start_date || '',
                 endDate: edu.endDate || edu.end_date || '',
                 location: edu.location || '',
-                bullets: formatDescriptionToBullets(edu.description || edu.bullets), // Use the new bullet formatter
+                bullets: edu.bullets || edu.description || '', // Use the new bullet formatter
                 minor: edu.minor || '',
                 gpa: edu.gpa || ''
             }));
@@ -159,7 +146,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 id: Date.now() + Math.random(),
                 name: proj.name || '',
                 date: proj.date || '', // Use 'date' from new JSON
-                relevance: formatDescriptionToBullets(proj.description || proj.relevance) // Use new bullet formatter
+                relevance: proj.relevance || proj.description || '' // Use new bullet formatter
             }));
 
             // --- Certification Mapping (Updated for 'orginization' typo and bullet formatting) ---
@@ -169,7 +156,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 name: cert.name || '',
                 organization: cert.organization || cert.orginization || '', // Handle 'orginization' typo from parser
                 date: cert.date || '',
-                relevance: formatDescriptionToBullets(cert.description || cert.relevance) // Use new bullet formatter
+                relevance: cert.relevance || cert.description || '' // Use new bullet formatter
             }));
 
             // --- Award Mapping (Updated for 'orginization' typo and bullet formatting) ---
@@ -179,7 +166,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 name: award.name || '',
                 organization: award.organization || award.orginization || '', // Handle 'orginization' typo from parser
                 date: award.date || '',
-                relevance: formatDescriptionToBullets(award.description || award.relevance) // Use new bullet formatter
+                relevance: award.relevance || award.description || '' // Use new bullet formatter
             }));
 
             // --- END MAPPING SECTION ---

@@ -4,7 +4,7 @@ const ResumeContext = createContext();
 
 export const useResume = () => useContext(ResumeContext);
 
-// Initial state definitions (remain the same)
+// Initial state definitions
 const initialContact = {
     fullName: '', email: '', phone: '', linkedin: '', website: '',
     city: '', state: '', country: '',
@@ -28,7 +28,6 @@ const initialProjects = () => ([
     { id: Date.now(), name: '', date: '', relevance: '' }
 ]);
 
-
 export const ResumeProvider = ({ children }) => {
     const [contact, setContactState] = useState(initialContact);
     const [contactToggles, setContactToggles] = useState(initialContactToggles);
@@ -42,25 +41,19 @@ export const ResumeProvider = ({ children }) => {
     const [jobDescription, setJobDescription] = useState('');
     const [aiAnalysis, setAiAnalysis] = useState(null);
 
-    // This function now correctly maps all database fields to frontend fields
     const mapAndSetData = useCallback((setter) => (data) => {
         if (Array.isArray(data)) {
             const mappedData = data.map(item => ({
                 ...item,
-                // Map date fields
                 startDate: item.start_date || item.startDate,
                 endDate: item.end_date || item.endDate,
-                // Map description/relevance fields
                 relevance: item.award_description || item.certification_description || item.project_description || item.relevance,
                 bullets: item.experience_description || item.education_description || item.bullets,
-                // Map ID fields
                 id: item.award_id || item.certification_id || item.project_id || item.experience_id || item.education_id || item.id,
             }));
-            // Ensure there's always at least one item for array-based sections
             if (mappedData.length > 0) {
                 setter(mappedData);
             } else {
-                // Based on the setter, create a correct new initial item
                 if (setter === setExperiencesState) setter(initialExperiences());
                 else if (setter === setEducationsState) setter(initialEducations());
                 else if (setter === setAwardsState) setter(initialAwards());
@@ -72,7 +65,6 @@ export const ResumeProvider = ({ children }) => {
         }
     }, []);
 
-    // The rest of the component remains the same...
     const setContact = useMemo(() => mapAndSetData(setContactState), [mapAndSetData]);
     const setSummary = useMemo(() => setSummaryState, []);
     const setSkills = useMemo(() => setSkillsState, []);
@@ -102,8 +94,48 @@ export const ResumeProvider = ({ children }) => {
         setAiAnalysis(null);
     }, []);
 
+    // --- NEW FUNCTION: reorderSection ---
+    // This allows you to swap items in any list (experience, projects, etc.)
+    const reorderSection = useCallback((sectionKey, startIndex, endIndex) => {
+        let setter;
+        let currentList;
+
+        // Determine which state to update
+        switch (sectionKey) {
+            case 'experience':
+                setter = setExperiencesState;
+                currentList = experiences;
+                break;
+            case 'projects':
+                setter = setProjectsState;
+                currentList = projects;
+                break;
+                case 'education':
+                setter = setEducationsState;
+                currentList = educations;
+                break;
+            case 'certifications':
+                setter = setCertificationsState;
+                currentList = certifications;
+                break;
+            case 'awards':
+                setter = setAwardsState;
+                currentList = awards;
+                break;
+            // Add other cases if you want to reorder other sections later
+            default:
+                return;
+        }
+
+        if (!currentList || !setter) return;
+
+        const result = Array.from(currentList);
+        const [removed] = result.splice(startIndex, 1);
+        result.splice(endIndex, 0, removed);
+        setter(result);
+    }, [experiences, projects, educations, certifications, awards]);
+
     const value = useMemo(() => ({
-        // --- ALL YOUR EXISTING VALUES ---
         contact, setContact,
         contactToggles, setContactToggles,
         summary, setSummary,
@@ -116,8 +148,9 @@ export const ResumeProvider = ({ children }) => {
         jobDescription, setJobDescription,
         aiAnalysis, setAiAnalysis,
         resetResume, addExperience, addEducation, addAward, addCertificate, addProject,
-
-        // --- ADD THESE MISSING LINES ---
+        // Export the new function
+        reorderSection, 
+        
         initialContact,
         initialExperiences,
         initialEducations,
@@ -128,10 +161,10 @@ export const ResumeProvider = ({ children }) => {
     }), [
         contact, contactToggles, summary, skills, experiences, educations, awards, certifications, projects, jobDescription, aiAnalysis,
         setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects,
-        resetResume, addExperience, addEducation, addAward, addCertificate, addProject
-        // Note: You don't need to add the initial... functions to the dependency array
-        // because they are defined outside the provider and never change.
+        resetResume, addExperience, addEducation, addAward, addCertificate, addProject,
+        reorderSection // Add to dependency array
     ]);
+
     return (
         <ResumeContext.Provider value={value}>
             {children}

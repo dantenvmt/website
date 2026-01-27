@@ -5,15 +5,15 @@ import jsPDF from 'jspdf';
 import AIKeywordAnalysis from '../../components/resume/AIKeywordAnalysis';
 
 // --- Pragmatic Drag and Drop Imports ---
-import { 
+import {
     monitorForElements,
     draggable,
     dropTargetForElements
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
-import { 
-    attachClosestEdge, 
-    extractClosestEdge 
+import {
+    attachClosestEdge,
+    extractClosestEdge
 } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 
 // --- Helper Component for Page Layout ---
@@ -58,8 +58,8 @@ const DraggablePreviewItem = ({ id, type, index, dataId, sectionId, children, di
         );
     }, [id, index, type, dataId, sectionId, disabled]);
 
-    const edgeStyle = closestEdge === 'top' ? 'border-t-2 border-blue-500' : 
-                      closestEdge === 'bottom' ? 'border-b-2 border-blue-500' : '';
+    const edgeStyle = closestEdge === 'top' ? 'border-t-2 border-blue-500' :
+        closestEdge === 'bottom' ? 'border-b-2 border-blue-500' : '';
     const draggingStyle = isDragging ? 'opacity-30' : '';
     const cursorStyle = disabled ? 'cursor-default' : (type === 'header' ? 'cursor-move hover:bg-gray-100' : 'cursor-grab hover:bg-gray-50');
 
@@ -67,7 +67,7 @@ const DraggablePreviewItem = ({ id, type, index, dataId, sectionId, children, di
         <div ref={ref} className={`relative group ${draggingStyle} ${edgeStyle} ${cursorStyle} transition-colors`}>
             {!disabled && (
                 <div className="absolute -left-6 top-0 h-full flex items-start pt-1 opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none">
-                     <span className="text-gray-400 text-xs">⋮⋮</span>
+                    <span className="text-gray-400 text-xs">⋮⋮</span>
                 </div>
             )}
             {children}
@@ -91,7 +91,7 @@ const FinalResumePage = () => {
     const navigate = useNavigate();
     const { resumeId } = useParams();
     const hiddenPreviewRef = useRef();
-    
+
     // --- State to control Section Order ---
     const [sectionOrder, setSectionOrder] = useState([
         'summary', 'experience', 'education', 'projects', 'certifications', 'awards', 'skills'
@@ -99,7 +99,7 @@ const FinalResumePage = () => {
 
     const [orderedSections, setOrderedSections] = useState([]);
     const [paginatedContent, setPaginatedContent] = useState([]);
-    const PAGE_HEIGHT_PX = 1300; 
+    const PAGE_HEIGHT_PX = 1300;
 
     // --- 1. Monitor for Drops ---
     useEffect(() => {
@@ -132,7 +132,7 @@ const FinalResumePage = () => {
 
                 // Reorder Items within a Section
                 if (srcType !== dstType) return;
-                const srcId = source.data.dataId; 
+                const srcId = source.data.dataId;
                 const dstId = destination.data.dataId;
                 let sourceArray, sectionKey;
 
@@ -141,7 +141,7 @@ const FinalResumePage = () => {
                 else if (srcType === 'education-item') { sourceArray = educations; sectionKey = 'education'; }
                 else if (srcType === 'cert-item') { sourceArray = certifications; sectionKey = 'certifications'; }
                 else if (srcType === 'award-item') { sourceArray = awards; sectionKey = 'awards'; }
-                
+
                 if (sourceArray && sectionKey && reorderSection) {
                     const srcIdx = sourceArray.findIndex(i => i.id === srcId);
                     const dstIdx = sourceArray.findIndex(i => i.id === dstId);
@@ -156,7 +156,7 @@ const FinalResumePage = () => {
     // --- 2. Fetch Data ---
     useEffect(() => {
         if (resumeId) {
-             fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`)
+            fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`)
                 .then(res => res.json())
                 .then(result => {
                     if (result.status === 'success' && result.data) {
@@ -178,6 +178,7 @@ const FinalResumePage = () => {
     }, [resumeId, setContact, setExperiences, setProjects, setEducations, setSummary, setCertifications, setAwards, setSkills]);
 
     // --- 3. Generate Granular Sections ---
+    // --- 3. Generate Granular Sections ---
     useEffect(() => {
         const granular = [];
         sectionOrder.forEach(sectionId => {
@@ -188,36 +189,52 @@ const FinalResumePage = () => {
                         granular.push({ id: 'summary-item', type: 'summary-content', content: summary });
                     }
                     break;
+
                 case 'experience':
-                    if (experiences?.length) {
+                    // FIX: Filter out experiences with no Role
+                    const validExperience = experiences?.filter(e => e.role && e.role.trim() !== '');
+                    if (validExperience?.length) {
                         granular.push({ id: 'experience-header', type: 'header', title: 'Experience', sectionId: 'experience' });
-                        experiences.forEach(exp => granular.push({ id: `exp-${exp.id}`, dataId: exp.id, type: 'experience-item', data: exp }));
+                        validExperience.forEach(exp => granular.push({ id: `exp-${exp.id}`, dataId: exp.id, type: 'experience-item', data: exp }));
                     }
                     break;
+
                 case 'education':
-                    if (educations?.length) {
+                    // FIX: Filter out education with no School Name
+                    const validEducation = educations?.filter(e => e.school && e.school.trim() !== '');
+                    if (validEducation?.length) {
                         granular.push({ id: 'education-header', type: 'header', title: 'Education', sectionId: 'education' });
-                        educations.forEach(edu => granular.push({ id: `edu-${edu.id}`, dataId: edu.id, type: 'education-item', data: edu }));
+                        validEducation.forEach(edu => granular.push({ id: `edu-${edu.id}`, dataId: edu.id, type: 'education-item', data: edu }));
                     }
                     break;
+
                 case 'projects':
-                    if (projects?.length) {
+                    // FIX: Filter out projects with no Project Name
+                    const validProjects = projects?.filter(p => p.name && p.name.trim() !== '');
+                    if (validProjects?.length) {
                         granular.push({ id: 'projects-header', type: 'header', title: 'Projects', sectionId: 'projects' });
-                        projects.forEach(proj => granular.push({ id: `proj-${proj.id}`, dataId: proj.id, type: 'projects-item', data: proj }));
+                        validProjects.forEach(proj => granular.push({ id: `proj-${proj.id}`, dataId: proj.id, type: 'projects-item', data: proj }));
                     }
                     break;
+
                 case 'certifications':
-                    if (certifications?.length) {
+                    // FIX: Filter out certifications with no Name
+                    const validCerts = certifications?.filter(c => c.name && c.name.trim() !== '');
+                    if (validCerts?.length) {
                         granular.push({ id: 'certifications-header', type: 'header', title: 'Certifications', sectionId: 'certifications' });
-                        certifications.forEach(cert => granular.push({ id: `cert-${cert.id}`, dataId: cert.id, type: 'cert-item', data: cert }));
+                        validCerts.forEach(cert => granular.push({ id: `cert-${cert.id}`, dataId: cert.id, type: 'cert-item', data: cert }));
                     }
                     break;
+
                 case 'awards':
-                    if (awards?.length) {
+                    // FIX: Filter out awards with no Award Name
+                    const validAwards = awards?.filter(a => a.name && a.name.trim() !== '');
+                    if (validAwards?.length) {
                         granular.push({ id: 'awards-header', type: 'header', title: 'Awards', sectionId: 'awards' });
-                        awards.forEach(award => granular.push({ id: `award-${award.id}`, dataId: award.id, type: 'award-item', data: award }));
+                        validAwards.forEach(award => granular.push({ id: `award-${award.id}`, dataId: award.id, type: 'award-item', data: award }));
                     }
                     break;
+
                 case 'skills':
                     if (skills && skills.trim()) {
                         granular.push({ id: 'skills-header', type: 'header', title: 'Skills', sectionId: 'skills' });
@@ -229,21 +246,20 @@ const FinalResumePage = () => {
         });
         setOrderedSections(granular);
     }, [experiences, projects, educations, certifications, awards, summary, skills, sectionOrder]);
-
     // --- 4. Pagination Logic ---
     useEffect(() => {
         if (hiddenPreviewRef.current && orderedSections.length > 0) {
             const PAGE_MARGIN = 80;
-            const USABLE_HEIGHT = PAGE_HEIGHT_PX - PAGE_MARGIN*2;
-            
+            const USABLE_HEIGHT = PAGE_HEIGHT_PX - PAGE_MARGIN * 2;
+
             const headerEl = hiddenPreviewRef.current.querySelector('header');
             let currentH = headerEl ? headerEl.offsetHeight : 0;
 
             const pages = [];
             let currentPage = [];
-            
+
             const itemNodes = hiddenPreviewRef.current.querySelectorAll('.granular-item');
-            
+
             itemNodes.forEach((node, idx) => {
                 const itemData = orderedSections[idx];
                 const itemH = node.offsetHeight;
@@ -251,7 +267,7 @@ const FinalResumePage = () => {
                 if (currentH + itemH > USABLE_HEIGHT && currentPage.length > 0) {
                     pages.push(currentPage);
                     currentPage = [];
-                    currentH = 0; 
+                    currentH = 0;
                 }
                 currentPage.push(itemData);
                 currentH += itemH;
@@ -266,10 +282,10 @@ const FinalResumePage = () => {
     const handleDownloadPDF = () => {
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
         doc.setFont('times');
-        
+
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 24; 
+        const margin = 24;
         const contentWidth = pageWidth - margin * 2;
         let y = margin;
 
@@ -278,7 +294,7 @@ const FinalResumePage = () => {
         const FONT_SIZE_NAME = 17;
         const LINE_SPACING = 1.15;
         const PARAGRAPH_SPACING = 3;
-        
+
         const LINE_HEIGHT_BODY = FONT_SIZE_BODY * 0.35 * LINE_SPACING;
         const LINE_HEIGHT_HEADER = FONT_SIZE_HEADER * 0.35 * LINE_SPACING;
 
@@ -297,15 +313,15 @@ const FinalResumePage = () => {
 
         doc.setFont('times', 'normal');
         doc.setFontSize(FONT_SIZE_BODY);
-        
+
         const locationString = [contactToggles.city && contact.city, contactToggles.state && contact.state, contactToggles.country && contact.country].filter(Boolean).join(', ');
         const contactLine = [
-            locationString, 
-            contact.email, 
-            contactToggles.phone ? contact.phone : '', 
+            locationString,
+            contact.email,
+            contactToggles.phone ? contact.phone : '',
             (contactToggles.linkedin && contact.linkedin) ? `linkedin.com/in/${contact.linkedin}` : ''
         ].filter(Boolean).join('   |   ');
-        
+
         doc.text(contactLine, pageWidth / 2, y, { align: 'center' });
         y += 8; // Spacing after contact info
 
@@ -327,17 +343,17 @@ const FinalResumePage = () => {
                 doc.setFontSize(FONT_SIZE_BODY);
 
                 if (item.type === 'summary-content' || item.type === 'skills-content') {
-                     const lines = doc.splitTextToSize(item.content || '', contentWidth);
-                     checkPageBreak(lines.length * LINE_HEIGHT_BODY);
-                     doc.text(lines, margin, y);
-                     y += lines.length * LINE_HEIGHT_BODY + PARAGRAPH_SPACING;
+                    const lines = doc.splitTextToSize(item.content || '', contentWidth);
+                    checkPageBreak(lines.length * LINE_HEIGHT_BODY);
+                    doc.text(lines, margin, y);
+                    y += lines.length * LINE_HEIGHT_BODY + PARAGRAPH_SPACING;
 
                 } else if (item.type === 'experience-item') {
                     const exp = item.data;
                     const dates = [exp.startDate, exp.endDate].filter(Boolean).join(' – ');
-                    
+
                     // Role & Date
-                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING); 
+                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
                     doc.setFont('times', 'bold');
                     doc.text(exp.role || '', margin, y);
                     doc.setFont('times', 'normal');
@@ -353,74 +369,74 @@ const FinalResumePage = () => {
 
                     // Bullets
                     if (exp.bullets) {
-                         const bullets = exp.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
-                         bullets.forEach(b => {
-                             const bLines = doc.splitTextToSize(b, contentWidth - 5);
-                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
-                             doc.text('•', margin + 2, y);
-                             doc.text(bLines, margin + 5, y);
-                             y += bLines.length * LINE_HEIGHT_BODY;
-                         });
+                        const bullets = exp.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
+                        bullets.forEach(b => {
+                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
+                            doc.text('•', margin + 2, y);
+                            doc.text(bLines, margin + 5, y);
+                            y += bLines.length * LINE_HEIGHT_BODY;
+                        });
                     }
                     y += PARAGRAPH_SPACING;
 
                 } else if (item.type === 'education-item') {
-                     const edu = item.data;
-                     const dates = [edu.startDate, edu.endDate].filter(Boolean).join(' – ');
-                     const degreeLine = [edu.degree, edu.minor].filter(Boolean).join(', ');
+                    const edu = item.data;
+                    const dates = [edu.startDate, edu.endDate].filter(Boolean).join(' – ');
+                    const degreeLine = [edu.degree, edu.minor].filter(Boolean).join(', ');
 
-                     checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
-                     doc.setFont('times', 'bold');
-                     doc.text(edu.school || '', margin, y);
-                     doc.setFont('times', 'normal');
-                     doc.text(dates, pageWidth - margin, y, { align: 'right' });
-                     y += LINE_HEIGHT_BODY;
+                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
+                    doc.setFont('times', 'bold');
+                    doc.text(edu.school || '', margin, y);
+                    doc.setFont('times', 'normal');
+                    doc.text(dates, pageWidth - margin, y, { align: 'right' });
+                    y += LINE_HEIGHT_BODY;
 
-                     doc.setFont('times', 'italic');
-                     doc.text(degreeLine + (edu.gpa ? ` | GPA: ${edu.gpa}` : ''), margin, y);
-                     doc.setFont('times', 'normal');
-                     doc.text(edu.location || '', pageWidth - margin, y, { align: 'right' });
-                     y += LINE_HEIGHT_BODY;
+                    doc.setFont('times', 'italic');
+                    doc.text(degreeLine + (edu.gpa ? ` | GPA: ${edu.gpa}` : ''), margin, y);
+                    doc.setFont('times', 'normal');
+                    doc.text(edu.location || '', pageWidth - margin, y, { align: 'right' });
+                    y += LINE_HEIGHT_BODY;
 
-                     if (edu.bullets) {
-                         const bullets = edu.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
-                         bullets.forEach(b => {
-                             const bLines = doc.splitTextToSize(b, contentWidth - 5);
-                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
-                             doc.text('•', margin + 2, y);
-                             doc.text(bLines, margin + 5, y);
-                             y += bLines.length * LINE_HEIGHT_BODY;
-                         });
-                     }
-                     y += PARAGRAPH_SPACING;
+                    if (edu.bullets) {
+                        const bullets = edu.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
+                        bullets.forEach(b => {
+                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
+                            doc.text('•', margin + 2, y);
+                            doc.text(bLines, margin + 5, y);
+                            y += bLines.length * LINE_HEIGHT_BODY;
+                        });
+                    }
+                    y += PARAGRAPH_SPACING;
 
                 } else if (['projects-item', 'cert-item', 'award-item'].includes(item.type)) {
-                     const data = item.data;
-                     const name = data.name + (data.organization ? `, ${data.organization}` : '');
-                     const desc = data.relevance || '';
+                    const data = item.data;
+                    const name = data.name + (data.organization ? `, ${data.organization}` : '');
+                    const desc = data.relevance || '';
 
-                     checkPageBreak(LINE_HEIGHT_BODY + PARAGRAPH_SPACING);
-                     doc.setFont('times', 'bold');
-                     doc.text(name, margin, y);
-                     doc.setFont('times', 'normal');
-                     doc.text(data.date || '', pageWidth - margin, y, { align: 'right' });
-                     y += LINE_HEIGHT_BODY;
+                    checkPageBreak(LINE_HEIGHT_BODY + PARAGRAPH_SPACING);
+                    doc.setFont('times', 'bold');
+                    doc.text(name, margin, y);
+                    doc.setFont('times', 'normal');
+                    doc.text(data.date || '', pageWidth - margin, y, { align: 'right' });
+                    y += LINE_HEIGHT_BODY;
 
-                     if (desc) {
-                         const bullets = desc.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
-                         bullets.forEach(b => {
-                             const bLines = doc.splitTextToSize(b, contentWidth - 5);
-                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
-                             doc.text('•', margin + 2, y);
-                             doc.text(bLines, margin + 5, y);
-                             y += bLines.length * LINE_HEIGHT_BODY;
-                         });
-                     }
-                     y += PARAGRAPH_SPACING;
+                    if (desc) {
+                        const bullets = desc.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
+                        bullets.forEach(b => {
+                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
+                            doc.text('•', margin + 2, y);
+                            doc.text(bLines, margin + 5, y);
+                            y += bLines.length * LINE_HEIGHT_BODY;
+                        });
+                    }
+                    y += PARAGRAPH_SPACING;
                 }
             }
         });
-        
+
         doc.save(`${(contact.fullName || 'Resume').replace(/\s/g, '_')}.pdf`);
     };
 
@@ -428,8 +444,8 @@ const FinalResumePage = () => {
     const renderGranularItem = (section) => {
         if (!section) return null;
         if (section.type === 'header') return <h2 className="text-sm font-bold uppercase tracking-widest text-gray-800 border-b border-black pb-1 mb-2 mt-4">{section.title}</h2>;
-        
-        const itemClass = "mb-2"; 
+
+        const itemClass = "mb-2";
 
         if (section.type === 'experience-item') {
             const exp = section.data;
@@ -452,7 +468,7 @@ const FinalResumePage = () => {
                 </div>
             );
         }
-        
+
         if (section.type === 'education-item') {
             const edu = section.data;
             return (
@@ -466,7 +482,7 @@ const FinalResumePage = () => {
                         <p className="text-xs font-normal text-gray-700">{edu.location}</p>
                     </div>
                     {edu.bullets && (
-                         <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
+                        <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
                             {edu.bullets.split('\n').map((line, i) => {
                                 const c = line.trim().replace(/^•\s*/, '');
                                 return c && <li key={i}>{c}</li>;
@@ -479,14 +495,14 @@ const FinalResumePage = () => {
 
         if (section.type === 'projects-item' || section.type === 'cert-item' || section.type === 'award-item') {
             const item = section.data;
-            const desc = item.relevance || ''; 
+            const desc = item.relevance || '';
             return (
-                 <div className={itemClass}>
+                <div className={itemClass}>
                     <div className="flex justify-between items-baseline">
                         <h3 className="text-xs font-bold text-gray-900">{item.name}{item.organization ? `, ${item.organization}` : ''}</h3>
                         {item.date && <p className="text-xs font-normal text-gray-700">{item.date}</p>}
                     </div>
-                     <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
+                    <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
                         {desc.split('\n').map((line, i) => {
                             const c = line.trim().replace(/^•\s*/, '');
                             return c && <li key={i}>{c}</li>;
@@ -495,9 +511,9 @@ const FinalResumePage = () => {
                 </div>
             );
         }
-        
+
         if (section.type === 'summary-content') return <p className="text-sm text-gray-800 leading-normal whitespace-pre-wrap">{section.content}</p>;
-        
+
         if (section.type === 'skills-content') {
             return (
                 <ul className="text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal break-words whitespace-pre-wrap">
@@ -522,7 +538,7 @@ const FinalResumePage = () => {
                         DOWNLOAD PDF
                     </button>
                 </div>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
                     {/* --- PREVIEW AREA --- */}
                     <div className="lg:col-span-2 bg-gray-200 p-4 sm:p-8 rounded-lg flex flex-col items-center overflow-x-auto">
@@ -533,8 +549,8 @@ const FinalResumePage = () => {
                                         <h1 className="text-xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
                                         <div className="text-xs text-gray-700 mt-2">
                                             <p>{[
-                                                contactToggles.city && contact.city, 
-                                                contactToggles.state && contact.state, 
+                                                contactToggles.city && contact.city,
+                                                contactToggles.state && contact.state,
                                                 contactToggles.country && contact.country
                                             ].filter(Boolean).join(', ') + ' | ' + contact.email + (contactToggles.phone ? ' | ' + contact.phone : '')}</p>
                                         </div>
@@ -542,9 +558,9 @@ const FinalResumePage = () => {
                                 )}
                                 <main>
                                     {pageSections.map((section, idx) => (
-                                        <DraggablePreviewItem 
+                                        <DraggablePreviewItem
                                             key={`${section.id}-${idx}`}
-                                            id={section.id} 
+                                            id={section.id}
                                             dataId={section.dataId}
                                             type={section.type}
                                             sectionId={section.sectionId}
@@ -559,7 +575,7 @@ const FinalResumePage = () => {
                             </ResumePage>
                         ))}
                     </div>
-                    
+
                     <div className="lg:col-span-1 space-y-8">
                         <AIKeywordAnalysis />
                     </div>
@@ -567,7 +583,7 @@ const FinalResumePage = () => {
 
                 {/* --- HIDDEN CALCULATION AREA --- */}
                 <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, width: '8.5in' }}>
-                     <div className="bg-white text-black font-serif" style={{ width: '8.5in', minHeight: '11in', padding: '1in' }}>
+                    <div className="bg-white text-black font-serif" style={{ width: '8.5in', minHeight: '11in', padding: '1in' }}>
                         <header className="text-center mb-6">
                             <h1 className="text-2xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
                         </header>

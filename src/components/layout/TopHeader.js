@@ -12,7 +12,8 @@ import {
     ClipboardDocumentListIcon,
     KeyIcon,
     ArrowRightOnRectangleIcon,
-    ChevronDownIcon
+    ChevronDownIcon,
+    NewspaperIcon
 } from '@heroicons/react/24/outline'; // Using outline icons
 
 const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
@@ -89,17 +90,32 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
 
                                 {/* --- NEW: Conditional Link for Admin --- */}
                                 {user.role.toLowerCase() === 'admin' && (
-                                    <Menu.Item>
-                                        {({ active }) => (
-                                            <Link
-                                                to="/admin"
-                                                className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}
-                                            >
-                                                <ShieldCheckIcon className="mr-3 h-5 w-5" />
-                                                Admin Dashboard
-                                            </Link>
-                                        )}
-                                    </Menu.Item>
+                                    <>
+                                        <Menu.Item>
+                                            {({ active }) => (
+                                                <Link
+                                                    to="/admin"
+                                                    className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}
+                                                >
+                                                    <ShieldCheckIcon className="mr-3 h-5 w-5" />
+                                                    Admin Dashboard
+                                                </Link>
+                                            )}
+                                        </Menu.Item>
+
+                                        {/* --- ADD THIS: Link to Content Manager --- */}
+                                        <Menu.Item>
+                                            {({ active }) => (
+                                                <Link
+                                                    to="/admin/content-manager"
+                                                    className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}
+                                                >
+                                                    <NewspaperIcon className="mr-3 h-5 w-5" />
+                                                    Manage Content
+                                                </Link>
+                                            )}
+                                        </Menu.Item>
+                                    </>
                                 )}
 
                                 {/* --- NEW: Conditional Link for User --- */}

@@ -36,6 +36,8 @@ import UserStatusPage from './pages/user/UserStatusPage';
 import ChangePasswordPage from './pages/user/ChangePasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ContentManagerPage from './pages/admin/ContentManagerPage';
+import ArticlePage from './pages/ArticlePage';
 export default function App() {
   return (
     <AuthProvider>
@@ -50,6 +52,11 @@ export default function App() {
                 </AdminRoute>
               }
             />
+            <Route path="admin/content-manager" element={
+              <AdminRoute>
+                <ContentManagerPage />
+              </AdminRoute>
+            } />
             <Route
               path="settings/change-password"
               element={
@@ -82,6 +89,7 @@ export default function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/news/:id" element={<ArticlePage />} />
             {/* --- Resume Routes --- */}
             {/* The main dashboard for resumes */}
             <Route

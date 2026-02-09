@@ -22,7 +22,11 @@ const ArticlePage = () => {
     if (!article) return <div className="text-white p-12 text-center text-xl">Article not found.</div>;
 
     return (
-        <div className="max-w-4xl mx-auto p-6 md:p-12 text-white">
+        // 1. Center the content and limit the width
+        // 'max-w-3xl' makes it narrower (approx 768px), matching standard article/image widths better than 4xl.
+        // 'mx-auto' centers it in the middle of the screen.
+        <div className="w-full max-w-3xl mx-auto p-6 md:p-8 text-white">
+
             <Link to="/" className="text-neutral-400 hover:text-white mb-8 inline-block transition-colors">← Back to Home</Link>
 
             <header className="mb-8 border-b border-neutral-800 pb-8">
@@ -39,28 +43,27 @@ const ArticlePage = () => {
             </header>
 
             {article.image_url && (
+                // This image will fill the max-w-3xl container, defining the width for everything else.
                 <div className="mb-10 rounded-xl overflow-hidden shadow-2xl aspect-video relative bg-neutral-800">
                     <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
                 </div>
             )}
 
+            {/* 'max-w-none' ensures the text expands to fill the 3xl container, aligning with the image */}
             <div className="prose prose-invert prose-lg max-w-none w-full">
-
-                {/* --- CSS CLEANER --- */}
-                {/* This forces the browser to ignore bad formatting from copy-paste */}
                 <style>{`
                     .article-content {
                         word-wrap: break-word;
                         overflow-wrap: break-word;
                     }
                     .article-content * {
-                        background-color: transparent !important; /* Removes white highlights */
-                        color: inherit !important;                /* Fixes black text on black bg */
-                        font-family: inherit !important;          /* Fixes font mismatches */
-                        height: auto !important;                  /* Fixes fixed heights */
-                        width: auto !important;                   /* Fixes fixed widths */
-                        max-width: 100% !important;               /* Prevents overflow */
-                        white-space: normal !important;           /* FORCE text to wrap naturally */
+                        background-color: transparent !important;
+                        color: inherit !important;
+                        font-family: inherit !important;
+                        height: auto !important;
+                        width: auto !important;
+                        max-width: 100% !important;
+                        white-space: normal !important;
                     }
                     .article-content img {
                         margin: 2rem auto;

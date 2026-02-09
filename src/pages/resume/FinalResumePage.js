@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
 import jsPDF from 'jspdf';
 import AIKeywordAnalysis from '../../components/resume/AIKeywordAnalysis';
-
+import { useAuth } from '../../context/AuthContext';
+import LoginModal from '../../components/auth/LoginModal'; //
 // --- Pragmatic Drag and Drop Imports ---
 import {
     monitorForElements,
@@ -76,6 +77,8 @@ const DraggablePreviewItem = ({ id, type, index, dataId, sectionId, children, di
 };
 
 const FinalResumePage = () => {
+    const { user } = useAuth(); // Access user state
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const {
         contact, setContact, contactToggles,
         summary, setSummary,
@@ -280,6 +283,10 @@ const FinalResumePage = () => {
 
     // --- 5. UPDATED PDF GENERATOR (Fixes Download Issue) ---
     const handleDownloadPDF = () => {
+        if (!user) {
+            setIsLoginModalOpen(true);
+            return;
+        }
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
         doc.setFont('times');
 
@@ -512,7 +519,7 @@ const FinalResumePage = () => {
             );
         }
 
-        if (section.type === 'summary-content') return <p className="text-sm text-gray-800 leading-normal whitespace-pre-wrap">{section.content}</p>;
+        if (section.type === 'summary-content') return <p className="text-sm text-gray-800 break-words leading-normal whitespace-pre-wrap">{section.content}</p>;
 
         if (section.type === 'skills-content') {
             return (
@@ -529,11 +536,23 @@ const FinalResumePage = () => {
 
     return (
         <div className="text-white min-h-screen p-4 sm:p-8">
+            {/* Login Modal Integration */}
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => setIsLoginModalOpen(false)}
+                onLoginSuccess={() => {
+                    setIsLoginModalOpen(false);
+                    // Optionally trigger download immediately after login
+                    handleDownloadPDF();
+                }}
+            />
+
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
                     <button onClick={() => navigate(`/resume/${resumeId}/contact`)} className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">
                         Back to Editor
                     </button>
+                    {/* The button now triggers the auth check */}
                     <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">
                         DOWNLOAD PDF
                     </button>

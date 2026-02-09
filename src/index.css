@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+
+    /* This prevents long strings from breaking layout globally */
+    p,
+    li,
+    h1,
+    h2,
+    h3,
+    h4,
+    span {
+        overflow-wrap: break-word;
+    }
+}

@@ -2,10 +2,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
-
+import { getGuestId } from '../../utils/guestSession';
+import { useAuth } from '../../context/AuthContext';
 
 const CreateResumeModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Get all functions and initial state objects from context
     const {
@@ -28,7 +30,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
-    // This function is fine
+    // --- MANUAL BUILD HANDLER ---
     const handleManualBuild = async (e) => {
         e.preventDefault();
         const trimmedName = resumeName.trim();
@@ -36,11 +38,17 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             alert('Please enter a resume name.');
             return;
         }
+
+        const guestId = !user ? getGuestId() : null;
+
         try {
             const response = await fetch('https://renaisons.com/api/create_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resumeName: trimmedName }),
+                body: JSON.stringify({
+                    resumeName: trimmedName,
+                    guestId: guestId
+                }),
                 credentials: 'include'
             });
             const result = await response.json();
@@ -58,10 +66,11 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         }
     };
 
-    // --- UPDATED AI Build Handler ---
+    // --- AI BUILD HANDLER (FIXED & ROBUST) ---
     const handleAiBuild = async (e) => {
         e.preventDefault();
         const trimmedName = resumeName.trim();
+
         if (!trimmedName) {
             alert('Please enter a resume name.');
             return;
@@ -72,14 +81,14 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         }
 
         setIsLoading(true);
-        setMessage({ type: '', text: '' });
+        setMessage({ type: '', text: 'Parsing resume...' });
 
         const formData = new FormData();
         formData.append('resumeFile', uploadedFile);
         formData.append('resumeName', trimmedName);
 
         try {
-            // 1. CALL GROQ BACKEND
+            // 1. CALL GROQ BACKEND TO PARSE FILE
             const parseResponse = await fetch('https://renaisons.com/api/parse_resume_groq.php', {
                 method: 'POST',
                 body: formData,
@@ -91,42 +100,59 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 throw new Error(errData.error || `Parsing failed: ${parseResponse.statusText}`);
             }
 
-            // 2. GET THE CLEAN JSON
             const parsedResult = await parseResponse.json();
+            console.log("AI Parse Success:", parsedResult);
 
-            // --- START MAPPING SECTION ---
+            // 2. MAP & CLEAN DATA
 
-            // --- Contact Mapping (as before) ---
+            // A. Location Splitter
+            let parsedCity = '';
+            let parsedState = '';
+            const rawLocation = parsedResult.contact?.location || parsedResult.contact?.address || '';
+            if (rawLocation && rawLocation.includes(',')) {
+                const parts = rawLocation.split(',');
+                parsedCity = parts[0].trim();
+                parsedState = parts[1] ? parts[1].trim() : '';
+            } else {
+                parsedCity = rawLocation;
+            }
+
+            // B. Contact Mapping
             const contactData = {
                 ...initialContact,
-                ...parsedResult.contact,
-                fullName: parsedResult.contact.name || ''
+                fullName: parsedResult.contact?.name || parsedResult.contact?.full_name || trimmedName,
+                email: parsedResult.contact?.email || parsedResult.contact?.email_address || parsedResult.contact?.mail || '',
+                phone: parsedResult.contact?.phone || parsedResult.contact?.phone_number || '',
+                linkedin: parsedResult.contact?.linkedin || parsedResult.contact?.linkedIn || '',
+                website: parsedResult.contact?.website || parsedResult.contact?.portfolio || '',
+                city: parsedResult.contact?.city || parsedCity,
+                state: parsedResult.contact?.state || parsedState,
+                country: parsedResult.contact?.country || ''
             };
 
-            // --- Skills Mapping (Updated for array of strings) ---
+            // C. Skills
             let skillsData = '';
             if (Array.isArray(parsedResult.skills)) {
-                // CHANGE THIS LINE: Join with newlines ('\n') instead of commas
                 skillsData = parsedResult.skills.join('\n');
             } else {
                 skillsData = parsedResult.skills || '';
             }
 
-            // --- Experience Mapping (Updated for 'title' and bullet formatting) ---
+            // D. Experiences
             const experiencesData = (parsedResult.experiences || []).map(exp => ({
                 ...initialExperiences()[0],
                 id: Date.now() + Math.random(),
-                role: exp.title || exp.role || '', // Use 'title' from new JSON
+                role: exp.title || exp.role || '',
                 company: exp.company || '',
-                startDate: exp.startDate || exp.start_date || '', // Use 'startDate' from new JSON
-                endDate: exp.endDate || exp.end_date || '', // Use 'endDate' from new JSON
-                isCurrent: exp.is_current || exp.isCurrent || (String(exp.endDate).toLowerCase() === 'present'),
+                startDate: exp.startDate || exp.start_date || '',
+                endDate: exp.endDate || exp.end_date || '',
+                isCurrent: exp.is_current || exp.isCurrent || (String(exp.endDate || '').toLowerCase() === 'present'),
                 location: exp.location || '',
-                bullets: exp.bullets || exp.description || '', // Use the new bullet formatter
+                bullets: exp.bullets || exp.description || '',
                 aiUsesLeft: 3
             }));
 
-            // --- Education Mapping (Updated for bullet formatting) ---
+            // E. Educations
             const educationsData = (parsedResult.educations || []).map(edu => ({
                 ...initialEducations()[0],
                 id: Date.now() + Math.random(),
@@ -135,57 +161,91 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 startDate: edu.startDate || edu.start_date || '',
                 endDate: edu.endDate || edu.end_date || '',
                 location: edu.location || '',
-                bullets: edu.bullets || edu.description || '', // Use the new bullet formatter
+                bullets: edu.bullets || edu.description || '',
                 minor: edu.minor || '',
                 gpa: edu.gpa || ''
             }));
 
-            // --- Project Mapping (Updated for 'description' and bullet formatting) ---
+            // F. Projects (Added organization mapping!)
             const projectsData = (parsedResult.projects || []).map(proj => ({
                 ...initialProjects()[0],
                 id: Date.now() + Math.random(),
                 name: proj.name || '',
-                date: proj.date || '', // Use 'date' from new JSON
-                relevance: proj.relevance || proj.description || '' // Use new bullet formatter
+                organization: proj.organization || '', // Ensure this exists
+                date: proj.date || '',
+                relevance: proj.relevance || proj.description || ''
             }));
 
-            // --- Certification Mapping (Updated for 'orginization' typo and bullet formatting) ---
+            // G. Certifications
             const certificationsData = (parsedResult.certifications || []).map(cert => ({
                 ...initialCertifications()[0],
                 id: Date.now() + Math.random(),
                 name: cert.name || '',
-                organization: cert.organization || cert.orginization || '', // Handle 'orginization' typo from parser
+                organization: cert.organization || cert.orginization || '',
                 date: cert.date || '',
-                relevance: cert.relevance || cert.description || '' // Use new bullet formatter
+                relevance: cert.relevance || cert.description || ''
             }));
 
-            // --- Award Mapping (Updated for 'orginization' typo and bullet formatting) ---
+            // H. Awards
             const awardsData = (parsedResult.awards || []).map(award => ({
                 ...initialAwards()[0],
                 id: Date.now() + Math.random(),
                 name: award.name || '',
-                organization: award.organization || award.orginization || '', // Handle 'orginization' typo from parser
+                organization: award.organization || award.orginization || '',
                 date: award.date || '',
-                relevance: award.relevance || award.description || '' // Use new bullet formatter
+                relevance: award.relevance || award.description || ''
             }));
 
-            // --- END MAPPING SECTION ---
+            // 3. CREATE RESUME ENTRY IN DB
+            const guestId = !user ? getGuestId() : null;
 
-
-            // 3. CREATE THE RESUME ENTRY IN DB
             const createResponse = await fetch('https://renaisons.com/api/create_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resumeName: trimmedName }),
+                body: JSON.stringify({
+                    resumeName: trimmedName,
+                    guestId: guestId
+                }),
                 credentials: 'include'
             });
             const createResult = await createResponse.json();
 
             if (createResult.status === 'success' && createResult.resume_id) {
+                setMessage({ type: '', text: 'Saving data to database...' });
 
-                // 4. POPULATE THE CONTEXT WITH MAPPED DATA
+                // 4. SAVE PARSED DATA TO DATABASE
+                const savePayload = {
+                    resume_id: createResult.resume_id,
+                    contact: contactData,
+                    skills: skillsData,
+                    summary: parsedResult.summary || '',
+                    experiences: experiencesData,
+                    educations: educationsData,
+                    projects: projectsData,
+                    awards: awardsData,
+                    certifications: certificationsData
+                };
+
+                console.log("Sending Payload to DB:", savePayload);
+
+                // --- CRITICAL FIX: Check response before proceeding ---
+                const saveResponse = await fetch('https://renaisons.com/api/save_resume_data.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(savePayload),
+                    credentials: 'include'
+                });
+
+                const saveResult = await saveResponse.json();
+
+                if (!saveResponse.ok || saveResult.status === 'error') {
+                    console.error("DB Save Failed:", saveResult);
+                    throw new Error(saveResult.message || "Failed to save data to the database.");
+                }
+
+                // 5. UPDATE FRONTEND CONTEXT (Only if DB save worked!)
                 setContact(contactData);
-                setSummary(parsedResult.summary || ''); // Summary is a single string, no formatting needed
+                setSummary(parsedResult.summary || '');
                 setSkills(skillsData);
                 setExperiences(experiencesData.length > 0 ? experiencesData : initialExperiences());
                 setEducations(educationsData.length > 0 ? educationsData : initialEducations());
@@ -194,19 +254,20 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 setCertifications(certificationsData.length > 0 ? certificationsData : initialCertifications());
                 setJobDescription(jobInput);
 
-                // 5. NAVIGATE *WITH* THE FLAG
-                const targetUrl = `/resume/${createResult.resume_id}/contact`;
+                // 6. NAVIGATE
+                const targetUrl = `/resume/${createResult.resume_id}/final`;
                 navigate(targetUrl, { state: { resumeName: trimmedName, isNewAiResume: true } });
 
                 handleClose();
 
             } else {
-                throw new Error(createResult.message || 'Failed to create resume entry.');
+                throw new Error(createResult.message || 'Failed to create resume ID.');
             }
 
         } catch (error) {
             console.error('AI Build Error:', error);
             setMessage({ type: 'error', text: `Error: ${error.message}` });
+            // Do NOT navigate if error occurs
         } finally {
             setIsLoading(false);
         }
@@ -224,8 +285,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    // ... (rest of the file is unchanged: renderStepOne, renderStepTwo, renderStepThree, return) ...
-
+    // --- JSX RENDER ---
     const renderStepOne = () => (
         <>
             <h2 className="text-2xl font-bold text-center mb-6">Create a new resume</h2>
@@ -242,7 +302,6 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                 >
                     Write your resume by yourself
                 </button>
-
             </div>
         </>
     );
@@ -395,7 +454,6 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             </form>
         </>
     );
-
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50">

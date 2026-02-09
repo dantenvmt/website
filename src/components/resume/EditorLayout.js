@@ -1,114 +1,111 @@
+// src/components/resume/EditorLayout.js
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, Outlet } from 'react-router-dom';
 import UpdateResumeModal from './UpdateResumeModal';
 import { useResume } from '../../context/ResumeContext';
 import ConfirmModal from '../common/ConfirmModal';
-import FeedbackModal from '../common/FeedbackModal'; // <-- 1. IMPORT FeedbackModal
+import FeedbackModal from '../common/FeedbackModal';
 
 const EditorLayout = () => {
-
     const location = useLocation();
     const navigate = useNavigate();
     const { resumeId } = useParams();
 
-    // --- 1. Destructure Data AND Setters from Context ---
+    // --- 1. Get Setters and Data from Context ---
     const {
         contact, summary, skills, experiences, educations, projects, awards, certifications,
         setContact, setSummary, setSkills, setExperiences,
         setEducations, setAwards, setCertifications, setProjects
     } = useResume();
 
-    const [isNewAi] = useState(location.state?.isNewAiResume || false);
-    // ----------------------
+    // State
     const [resumeName, setResumeName] = useState(location.state?.resumeName || 'Loading...');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isSaving, setIsSaving] = useState(false); // --- 2. Add Saving State ---
+    const [isSaving, setIsSaving] = useState(false);
+    const [isNewAi] = useState(location.state?.isNewAiResume || false); // Flag to skip fetch if just created
 
-    // State for the "Are you sure?" confirmation modal
-    const [modalState, setModalState] = useState({
-        isOpen: false,
-        title: '',
-        message: '',
-        onConfirm: () => { },
-        confirmText: 'Confirm'
-    });
+    // Modals
+    const [modalState, setModalState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { }, confirmText: 'Confirm' });
+    const [feedbackModalState, setFeedbackModalState] = useState({ isOpen: false, title: '', message: '', isError: false });
 
-    // State for the Feedback Modal
-    const [feedbackModalState, setFeedbackModalState] = useState({
-        isOpen: false,
-        title: '',
-        message: '',
-        isError: false
-    });
-
-    // --- HOOK 1: DATA LOADING ---
+    // --- 2. DATA LOADING (THE FIX) ---
     useEffect(() => {
         const fetchResumeData = async () => {
+            // If we just used AI to create this, the Context is already full. Don't overwrite it with empty DB data yet.
+            if (isNewAi) {
+                console.log("Skipping fetch: New AI Resume detected.");
+                return;
+            }
+
             try {
+                // Fetch the structured data from the PHP file you just created
                 const response = await fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`, {
                     credentials: 'include'
                 });
                 const result = await response.json();
 
                 if (result.status === 'success' && result.data) {
-                    const { data } = result;
-                    setResumeName(data.resume_name || 'Untitled Resume');
-                    const contactToSet = data.contact_info || {};
-                    if (contactToSet.full_name) {
-                        contactToSet.fullName = contactToSet.full_name;
-                        delete contactToSet.full_name;
-                    }
+                    const dbData = result.data;
 
-                    // Make sure the API-fetched name gets into the contact object
-                    if (!contactToSet.fullName) {
-                        contactToSet.fullName = data.resume_name || '';
-                    }
+                    // A. Set Resume Name (Title)
+                    setResumeName(dbData.resume_name || 'Untitled Resume');
 
-                    setContact(contactToSet);
-                    setSummary(data.summary?.summaries_description || '');
-                    setSkills(data.skills?.skills_description || '');
-                    setExperiences(data.experiences || []);
-                    setEducations(data.educations || []);
-                    setAwards(data.awards || []);
-                    setCertifications(data.certifications || []);
-                    setProjects(data.projects || []);
+                    // B. Map Contact Info (DB snake_case -> Context camelCase)
+                    // We explicitly map columns because Context expects 'fullName', DB has 'full_name'
+                    const rawContact = dbData.contact_info || {};
+                    const mappedContact = {
+                        fullName: rawContact.full_name || rawContact.fullName || '',
+                        email: rawContact.email || '',
+                        phone: rawContact.phone || '',
+                        linkedin: rawContact.linkedin || '',
+                        website: rawContact.website || '',
+                        city: rawContact.city || '',
+                        state: rawContact.state || '',
+                        country: rawContact.country || ''
+                    };
+                    // If DB contact is empty, fallback to resume name (but prefer empty so placeholder shows)
+                    if (!mappedContact.fullName && dbData.resume_name) {
+                        // Only force filename if absolutely nothing else exists
+                        // mappedContact.fullName = dbData.resume_name; 
+                    }
+                    setContact(mappedContact);
+
+                    // C. Map Simple Strings (Summary & Skills)
+                    // DB returns an object { summaries_description: "..." }, Context wants a STRING.
+                    setSummary(dbData.summary?.summaries_description || '');
+                    setSkills(dbData.skills?.skills_description || '');
+
+                    // D. Map Arrays (Context 'mapAndSetData' handles the camelCase conversion for these)
+                    setExperiences(dbData.experiences || []);
+                    setEducations(dbData.educations || []);
+                    setProjects(dbData.projects || []);
+                    setAwards(dbData.awards || []);
+                    setCertifications(dbData.certifications || []);
+
                 } else {
-                    console.error("Failed to fetch resume details:", result.message);
-                    setResumeName('Error Loading Name');
+                    console.error("Failed to load resume data:", result.message);
                 }
             } catch (error) {
-                console.error("Error fetching resume data:", error);
+                console.error("Network error fetching resume:", error);
             }
         };
-        if (resumeId && !isNewAi) {
+
+        if (resumeId) {
             fetchResumeData();
         }
-    }, [
-        resumeId,
-        isNewAi,
-        navigate,
-        setContact,
-        setSummary,
-        setSkills,
-        setExperiences,
-        setEducations,
-        setAwards,
-        setCertifications,
-        setProjects
-    ]);
+    }, [resumeId, isNewAi, setContact, setSummary, setSkills, setExperiences, setEducations, setProjects, setAwards, setCertifications]);
 
-    const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
 
-    // --- 3. UPDATED: Handle Finish (Save All & Navigate) ---
+    // --- 3. SAVE FUNCTIONALITY ---
     const handleFinish = async () => {
         if (isSaving) return;
         setIsSaving(true);
 
-        // Helper function to batch save list items (experience, education, etc.)
+        // Helper for array saving
         const saveList = async (list, endpoint, idField, setter) => {
             const promises = list.map(item => {
-                // Basic validation to ensure we don't save empty rows
+                // Validate item has at least some data
                 let isValid = false;
                 if (endpoint.includes('experience')) isValid = !!(item.role || item.company);
                 else if (endpoint.includes('education')) isValid = !!(item.degree || item.school);
@@ -117,39 +114,31 @@ const EditorLayout = () => {
                 else if (endpoint.includes('certification')) isValid = !!item.name;
 
                 if (isValid) {
+                    // Ensure we send snake_case to DB if needed, or rely on PHP to handle it
+                    // Sending the whole item is usually safe if PHP maps it.
                     return fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ...item, resume_id: resumeId })
-                    })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.status === 'success' && data[idField]) {
-                                return { oldId: item.id, newId: data[idField] };
-                            }
-                            return null;
-                        })
-                        .catch(() => null);
+                    }).then(res => res.json()).then(d => d.status === 'success' ? { oldId: item.id, newId: d[idField] } : null).catch(() => null);
                 }
                 return Promise.resolve(null);
             });
 
             const results = await Promise.all(promises);
+            // Update IDs in context so we don't create duplicates next save
             const updates = results.filter(Boolean);
-
-            // Update context with new IDs if successful
             if (updates.length > 0 && setter) {
-                setter(prev => prev.map(item => {
-                    const update = updates.find(u => u.oldId === item.id);
-                    return update ? { ...item, id: update.newId } : item;
+                setter(prev => prev.map(p => {
+                    const u = updates.find(up => up.oldId === p.id);
+                    return u ? { ...p, id: u.newId } : p;
                 }));
             }
         };
 
         try {
-            // Execute all saves concurrently
             await Promise.all([
-                // Single Record Saves
+                // Save Single Objects
                 fetch('https://renaisons.com/api/save_contact.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -165,7 +154,7 @@ const EditorLayout = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ resume_id: resumeId, skills_description: skills })
                 }),
-                // Batch List Saves
+                // Save Arrays
                 saveList(experiences, 'https://renaisons.com/api/save_experience.php', 'experience_id', setExperiences),
                 saveList(educations, 'https://renaisons.com/api/save_education.php', 'education_id', setEducations),
                 saveList(projects, 'https://renaisons.com/api/save_project.php', 'project_id', setProjects),
@@ -173,26 +162,23 @@ const EditorLayout = () => {
                 saveList(certifications, 'https://renaisons.com/api/save_certification.php', 'certification_id', setCertifications),
             ]);
 
-            // Navigate to final preview page after saving
             navigate(`/resume/${resumeId}/final`, { state: { resumeName } });
 
         } catch (error) {
-            console.error("Auto-save error:", error);
+            console.error("Save error:", error);
             setFeedbackModalState({
                 isOpen: true,
                 title: 'Save Warning',
-                message: 'Some data might not have saved correctly, but we are proceeding to preview.',
+                message: 'Data saved, but a network check failed. Proceeding to preview.',
                 isError: true
             });
-            // Proceed after a short delay so user sees the error if they want
-            setTimeout(() => {
-                navigate(`/resume/${resumeId}/final`, { state: { resumeName } });
-            }, 2000);
+            setTimeout(() => navigate(`/resume/${resumeId}/final`, { state: { resumeName } }), 2000);
         } finally {
             setIsSaving(false);
         }
     };
 
+    // --- 4. RENAME & DELETE HANDLERS ---
     const handleUpdateName = (newName) => {
         setResumeName(newName);
         setIsEditModalOpen(false);
@@ -202,61 +188,33 @@ const EditorLayout = () => {
         setModalState({
             isOpen: true,
             title: 'Delete Resume',
-            message: `Are you sure you want to permanently delete "${resumeName || 'this resume'}"? This action cannot be undone.`,
+            message: `Are you sure you want to delete "${resumeName}"? This cannot be undone.`,
             confirmText: 'Delete',
             onConfirm: performDelete
         });
     };
 
     const performDelete = async () => {
-        setModalState({ isOpen: false }); // Close the "are you sure" modal
+        setModalState({ isOpen: false });
         try {
-            const response = await fetch('https://renaisons.com/api/delete_resume.php', {
+            const res = await fetch('https://renaisons.com/api/delete_resume.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ resume_id: resumeId }),
-                credentials: 'include',
+                credentials: 'include'
             });
-            const result = await response.json();
-
-            if (result.status === 'success') {
-                setFeedbackModalState({
-                    isOpen: true,
-                    title: 'Success',
-                    message: `Resume "${resumeName}" has been deleted.`,
-                    isError: false
-                });
+            const data = await res.json();
+            if (data.status === 'success') {
+                navigate('/resume');
             } else {
-                console.error('API Error:', result.message || 'Unknown error');
-                setFeedbackModalState({
-                    isOpen: true,
-                    title: 'Delete Error',
-                    message: result.message || 'Please try again.',
-                    isError: true
-                });
+                setFeedbackModalState({ isOpen: true, title: 'Error', message: data.message || 'Delete failed', isError: true });
             }
-        } catch (error) {
-            console.error('Failed to delete resume:', error);
-            setFeedbackModalState({
-                isOpen: true,
-                title: 'Network Error',
-                message: 'A network error occurred while deleting the resume.',
-                isError: true
-            });
+        } catch (e) {
+            setFeedbackModalState({ isOpen: true, title: 'Error', message: 'Network error', isError: true });
         }
     };
 
-    const handleModalClose = () => {
-        setModalState({ isOpen: false });
-    };
-
-    const handleFeedbackModalClose = () => {
-        if (!feedbackModalState.isError && feedbackModalState.title === 'Success') {
-            navigate('/resume');
-        }
-        setFeedbackModalState({ isOpen: false, title: '', message: '', isError: false });
-    };
-
+    const navItems = ['Contact', 'Experience', 'Education', 'Certifications', 'Awards', 'Skills', 'Projects', 'Summary'];
 
     return (
         <>
@@ -266,10 +224,13 @@ const EditorLayout = () => {
                 onSave={handleUpdateName}
                 currentName={resumeName}
             />
+
             <div className="text-white min-h-screen p-6">
                 <div className="max-w-7xl mx-auto">
+                    {/* NAV BAR */}
                     <nav className="flex flex-wrap items-center justify-between gap-4 mb-8">
                         <div className="flex items-center space-x-4 flex-wrap">
+                            {/* Dropdown Title */}
                             <div className="relative">
                                 <button
                                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -281,18 +242,20 @@ const EditorLayout = () => {
                                 {isDropdownOpen && (
                                     <div className="absolute top-full mt-2 w-48 bg-[#1e293b] border border-gray-700 rounded-md shadow-lg z-20">
                                         <ul>
-                                            <li><button onClick={() => { setIsEditModalOpen(true); setIsDropdownOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600">Edit</button></li>
+                                            <li><button onClick={() => { setIsEditModalOpen(true); setIsDropdownOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600">Rename</button></li>
                                             <li><button onClick={handleDeleteClick} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white">Delete</button></li>
                                         </ul>
                                     </div>
                                 )}
                             </div>
+
+                            {/* Section Tabs */}
                             <div className="flex items-center bg-[#1e293b] border border-gray-700 rounded-md p-1 space-x-1 flex-wrap">
                                 {navItems.map((item) => (
                                     <NavLink
                                         key={item}
                                         to={`/resume/${resumeId}/${item.toLowerCase()}`}
-                                        state={{ ...location.state, resumeName: resumeName }}
+                                        state={{ ...location.state, resumeName }}
                                         className={({ isActive }) =>
                                             `px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${isActive
                                                 ? 'bg-blue-600 text-white'
@@ -305,37 +268,41 @@ const EditorLayout = () => {
                                 ))}
                             </div>
                         </div>
-                        <div className="flex items-center space-x-2">
+
+                        {/* Finish Button */}
+                        <div>
                             <button
                                 onClick={handleFinish}
-                                disabled={isSaving} // Disable button while saving
-                                className="bg-blue-600 hover:bg-blue-700 border border-gray-600 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                disabled={isSaving}
+                                className="bg-blue-600 hover:bg-blue-700 border border-gray-600 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition-colors"
                             >
                                 {isSaving ? 'Saving...' : 'Finish Up & Preview'}
                             </button>
                         </div>
                     </nav>
+
+                    {/* MAIN CONTENT AREA */}
                     <main>
                         <Outlet />
                     </main>
                 </div>
             </div>
+
+            {/* Modals */}
             <ConfirmModal
                 isOpen={modalState.isOpen}
-                onClose={handleModalClose}
+                onClose={() => setModalState({ ...modalState, isOpen: false })}
                 onConfirm={modalState.onConfirm}
                 title={modalState.title}
                 message={modalState.message}
                 confirmText={modalState.confirmText}
             />
-
-            {/* Render the feedback modal */}
             {feedbackModalState.isOpen && (
                 <FeedbackModal
                     title={feedbackModalState.title}
                     message={feedbackModalState.message}
                     isError={feedbackModalState.isError}
-                    onClose={handleFeedbackModalClose}
+                    onClose={() => setFeedbackModalState({ ...feedbackModalState, isOpen: false })}
                 />
             )}
         </>

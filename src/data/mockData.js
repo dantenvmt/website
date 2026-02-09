@@ -1,7 +1,7 @@
 
 export const navLinks = [
     { id: 'home', title: 'Home' },
-    { id: 'resume', title: 'Resume Optimization' },
+    { id: 'resume', title: 'Resume Optimization', userOnly: false },
     { id: 'job_board', title: 'Job Board' },
     { id: 'company', title: 'Company' },
     { id: 'faq', title: 'FAQ' },

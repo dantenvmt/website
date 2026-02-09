@@ -56,7 +56,8 @@ const ResumeDashboardPage = () => {
 
     // --- Function to handle clicking on a resume card ---
     const handleResumeClick = (resume) => {
-        navigate(`/resume/${resume.resume_id}/contact`, { state: { resumeName: resume.resume_name } });
+        // Navigate straight to the FinalResumePage (optimization/preview)
+        navigate(`/resume/${resume.resume_id}/final`, { state: { resumeName: resume.resume_name } });
     };
 
     return (

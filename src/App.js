@@ -92,14 +92,9 @@ export default function App() {
             <Route path="/news/:id" element={<ArticlePage />} />
             {/* --- Resume Routes --- */}
             {/* The main dashboard for resumes */}
-            <Route
-              path="resume"
-              element={
-                <ProtectedRoute>
-                  <ResumeDashboardPage />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="resume" element={<ResumeDashboardPage />} />
+            <Route path="resume/:resumeId/final" element={<FinalResumePage />} />
+            {/* The resume editor with nested routes for each section */}
 
             <Route
               path="resume/:resumeId"
@@ -119,14 +114,6 @@ export default function App() {
               <Route path="summary" element={<Summary />} />
             </Route>
 
-            <Route
-              path="resume/:resumeId/final"
-              element={
-                <ProtectedRoute>
-                  <FinalResumePage />
-                </ProtectedRoute>
-              }
-            />
             {/* --- NEW User Status Route --- */}
             <Route
               path="my-status"

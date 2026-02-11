@@ -3,9 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 import MainLayout from './components/layout/MainLayout';
-import { ResumeProvider } from './context/ResumeContext';
 import EditorLayout from './components/resume/EditorLayout';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext'; // Verify path
+import { ResumeProvider } from './context/ResumeContext';
 // --- Page Components ---
 import HomePage from './pages/HomePage';
 import GenericPage from './pages/GenericPage';
@@ -39,6 +39,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ContentManagerPage from './pages/admin/ContentManagerPage';
 import ArticlePage from './pages/ArticlePage';
 export default function App() {
+  const { user } = useAuth();
   return (
     <AuthProvider>
       <ResumeProvider>
@@ -118,8 +119,13 @@ export default function App() {
             <Route
               path="my-status"
               element={
-                <ProtectedRoute> {/* Use regular ProtectedRoute */}
-                  <UserStatusPage />
+                <ProtectedRoute>
+                  {user?.role === 'client' ? (
+                    <UserStatusPage />
+                  ) : (
+                    // If a 'user' tries to access this, kick them to their allowed dashboard
+                    <Navigate to="/dashboard" replace />
+                  )}
                 </ProtectedRoute>
               }
             />

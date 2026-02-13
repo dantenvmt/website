@@ -196,7 +196,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                 </button>
                 <button
                     onClick={() => setShowSignup(true)}
-                    className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
+                    className="px-4 py-2 text-sm font-medium bg-[#06b6d4] text-white rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
                 >
                     Sign Up
                 </button>

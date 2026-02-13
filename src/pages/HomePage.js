@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import LatestRoles from '../components/home/LatestRoles'; // Make sure this path matches your folder structure
 
 const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 }) => {
     const [count, setCount] = useState(0);
@@ -26,26 +27,8 @@ const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 })
 
     return <span>{count}{suffix}</span>;
 };
+
 const HomePage = () => {
-    const [roles, setRoles] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        // Fetch specific job/role data instead of general news
-        const fetchRoles = async () => {
-            try {
-                const response = await fetch('https://renaisons.com/api/get_roles.php');
-                const result = await response.json();
-                if (result.status === 'success') setRoles(result.data);
-            } catch (error) {
-                console.error("Failed to load roles:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchRoles();
-    }, []);
-
     return (
         <div className="min-h-screen bg-black text-white font-sans">
             {/* --- HERO SECTION --- */}
@@ -94,14 +77,14 @@ const HomePage = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                    {/* Search Jobs Button: Original White Color + New Hover Effects */}
+                    {/* Search Jobs Button */}
                     <button
                         className="w-full sm:w-auto bg-white text-black px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-neutral-200 hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
                     >
                         Search Jobs
                     </button>
 
-                    {/* Optimize Resume Button: Cyan Brand Color + Hover Effects */}
+                    {/* Optimize Resume Button */}
                     <Link
                         to="/resume"
                         className="w-full sm:w-auto bg-[#06b6d4] text-white px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-[#0891b2] hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
@@ -110,25 +93,13 @@ const HomePage = () => {
                     </Link>
                 </div>
             </section>
+
             {/* --- LATEST ROLES SECTION --- */}
-            <section className="max-w-5xl mx-auto px-6 pb-24">
-                <h2 className="text-2xl font-bold mb-8">Latest roles</h2>
-                <div className="grid gap-4">
-                    {isLoading ? (
-                        <div className="animate-pulse bg-neutral-900 h-20 rounded-xl" />
-                    ) : roles.map(role => (
-                        <Link key={role.id} to={`/jobs/${role.id}`} className="group flex items-center justify-between p-6 bg-neutral-900 border border-neutral-800 rounded-xl hover:border-neutral-600 transition-all">
-                            <div>
-                                <h3 className="text-xl font-bold group-hover:text-indigo-400">{role.title}</h3>
-                                <p className="text-neutral-500 mt-1">{role.hired_count} hired recently</p>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-lg font-mono text-indigo-400">${role.pay_range}/hr</span>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
-            </section>
+            {/* This will automatically render the grid with the 
+                8 fake roles you set up in LatestRoles.jsx 
+            */}
+            <LatestRoles />
+
         </div>
     );
 };

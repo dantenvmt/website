@@ -29,17 +29,15 @@ const EditorLayout = () => {
     const [modalState, setModalState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { }, confirmText: 'Confirm' });
     const [feedbackModalState, setFeedbackModalState] = useState({ isOpen: false, title: '', message: '', isError: false });
 
-    // --- 2. DATA LOADING (THE FIX) ---
+    // --- 2. DATA LOADING ---
     useEffect(() => {
         const fetchResumeData = async () => {
-            // If we just used AI to create this, the Context is already full. Don't overwrite it with empty DB data yet.
             if (isNewAi) {
                 console.log("Skipping fetch: New AI Resume detected.");
                 return;
             }
 
             try {
-                // Fetch the structured data from the PHP file you just created
                 const response = await fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`, {
                     credentials: 'include'
                 });
@@ -51,8 +49,7 @@ const EditorLayout = () => {
                     // A. Set Resume Name (Title)
                     setResumeName(dbData.resume_name || 'Untitled Resume');
 
-                    // B. Map Contact Info (DB snake_case -> Context camelCase)
-                    // We explicitly map columns because Context expects 'fullName', DB has 'full_name'
+                    // B. Map Contact Info 
                     const rawContact = dbData.contact_info || {};
                     const mappedContact = {
                         fullName: rawContact.full_name || rawContact.fullName || '',
@@ -64,19 +61,20 @@ const EditorLayout = () => {
                         state: rawContact.state || '',
                         country: rawContact.country || ''
                     };
-                    // If DB contact is empty, fallback to resume name (but prefer empty so placeholder shows)
-                    if (!mappedContact.fullName && dbData.resume_name) {
-                        // Only force filename if absolutely nothing else exists
-                        // mappedContact.fullName = dbData.resume_name; 
-                    }
                     setContact(mappedContact);
 
-                    // C. Map Simple Strings (Summary & Skills)
-                    // DB returns an object { summaries_description: "..." }, Context wants a STRING.
-                    setSummary(dbData.summary?.summaries_description || '');
-                    setSkills(dbData.skills?.skills_description || '');
+                    // C. Map Simple Strings (Summary & Skills) - FIX: Safely check multiple API formats
+                    const fetchedSummary = dbData.summary?.summaries_description || dbData.summaries?.[0]?.summaries_description || dbData.resume_summaries?.[0]?.summaries_description;
+                    if (fetchedSummary !== undefined) {
+                        setSummary(fetchedSummary);
+                    }
 
-                    // D. Map Arrays (Context 'mapAndSetData' handles the camelCase conversion for these)
+                    const fetchedSkills = dbData.skills?.skills_description || dbData.skills?.[0]?.skills_description;
+                    if (fetchedSkills !== undefined) {
+                        setSkills(fetchedSkills);
+                    }
+
+                    // D. Map Arrays 
                     setExperiences(dbData.experiences || []);
                     setEducations(dbData.educations || []);
                     setProjects(dbData.projects || []);
@@ -105,7 +103,6 @@ const EditorLayout = () => {
         // Helper for array saving
         const saveList = async (list, endpoint, idField, setter) => {
             const promises = list.map(item => {
-                // Validate item has at least some data
                 let isValid = false;
                 if (endpoint.includes('experience')) isValid = !!(item.role || item.company);
                 else if (endpoint.includes('education')) isValid = !!(item.degree || item.school);
@@ -114,19 +111,17 @@ const EditorLayout = () => {
                 else if (endpoint.includes('certification')) isValid = !!item.name;
 
                 if (isValid) {
-                    // Ensure we send snake_case to DB if needed, or rely on PHP to handle it
-                    // Sending the whole item is usually safe if PHP maps it.
                     return fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...item, resume_id: resumeId })
+                        body: JSON.stringify({ ...item, resume_id: resumeId }),
+                        credentials: 'include' // <-- FIX: Added missing credentials
                     }).then(res => res.json()).then(d => d.status === 'success' ? { oldId: item.id, newId: d[idField] } : null).catch(() => null);
                 }
                 return Promise.resolve(null);
             });
 
             const results = await Promise.all(promises);
-            // Update IDs in context so we don't create duplicates next save
             const updates = results.filter(Boolean);
             if (updates.length > 0 && setter) {
                 setter(prev => prev.map(p => {
@@ -142,17 +137,20 @@ const EditorLayout = () => {
                 fetch('https://renaisons.com/api/save_contact.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume_id: resumeId, ...contact })
+                    body: JSON.stringify({ resume_id: resumeId, ...contact }),
+                    credentials: 'include' // <-- FIX: Added missing credentials
                 }),
                 fetch('https://renaisons.com/api/save_summary.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume_id: resumeId, summaries_description: summary })
+                    body: JSON.stringify({ resume_id: resumeId, summary: summary }), // <-- FIX: Changed summaries_description to summary
+                    credentials: 'include' // <-- FIX: Added missing credentials
                 }),
                 fetch('https://renaisons.com/api/save_skill.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume_id: resumeId, skills_description: skills })
+                    body: JSON.stringify({ resume_id: resumeId, skills_description: skills }),
+                    credentials: 'include' // <-- FIX: Added missing credentials
                 }),
                 // Save Arrays
                 saveList(experiences, 'https://renaisons.com/api/save_experience.php', 'experience_id', setExperiences),

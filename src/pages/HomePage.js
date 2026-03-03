@@ -58,7 +58,7 @@ const HomePage = () => {
 
                     <div className="text-center">
                         <span className="block text-white text-3xl md:text-4xl font-semibold mb-1">
-                            $<AnimatedCounter target={1} decimals={1} suffix="M+" />
+                            <AnimatedCounter target={1} decimals={1} suffix="M+" />
                         </span>
                         <p className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-neutral-500 font-bold">
                             Search Jobs

@@ -51,8 +51,9 @@ const Summary = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     resume_id: resumeId,
-                    summaries_description: summary
+                    summary: summary // This perfectly matches $data->summary in your PHP!
                 }),
+                credentials: 'include' // <-- ADD THIS LINE
             });
 
             const result = await response.json();
@@ -119,7 +120,7 @@ const Summary = () => {
                             id="summary"
                             name="summary"
                             value={summary}
-                            onChange={(e) => setSummary(e.targe.value)}
+                            onChange={(e) => setSummary(e.target.value)}
                             placeholder="e.g., Driven Data Scientist with 5 years of experience..."
                             rows="10"
                         />

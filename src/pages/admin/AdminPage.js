@@ -80,7 +80,7 @@ const AdminPage = () => {
     const [finalContractFile, setFinalContractFile] = useState({});
     const finalContractInputRefs = useRef({});
     const { user: adminUser } = useAuth();
-    const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', firstName: '', lastName: '' });
+    const [newUser, setNewUser] = useState({ email: '', password: '', role: 'client', firstName: '', lastName: '' });
     const [createUserMessage, setCreateUserMessage] = useState({ type: '', text: '' });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
     const [usersList, setUsersList] = useState([]);
@@ -198,7 +198,7 @@ const AdminPage = () => {
             const result = await response.json();
             if (response.ok && result.status === 'success') {
                 setCreateUserMessage({ type: 'success', text: `User ${newUser.email} created successfully!` });
-                setNewUser({ email: '', password: '', role: 'user', firstName: '', lastName: '' }); // Reset form
+                setNewUser({ email: '', password: '', role: 'client', firstName: '', lastName: '' }); // Reset form
                 fetchUsers(); // Refresh user list
             } else {
                 setCreateUserMessage({ type: 'error', text: result.message || 'Failed to create user.' });
@@ -700,9 +700,11 @@ const AdminPage = () => {
                     <div>
                         <label htmlFor="role" className="block text-sm font-medium text-neutral-300 mb-1">Role</label>
                         <select id="role" name="role" value={newUser.role} onChange={handleNewUserChange} className="w-full bg-neutral-700 border border-neutral-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-white">
-                            <option value="user">User</option>
+                            <option value="client">Client</option>
                             <option value="admin">Admin</option>
+                            <option value="user">User</option>
                         </select>
+
                     </div>
                     {createUserMessage.text && <p className={`text-sm ${createUserMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{createUserMessage.text}</p>}
                     <button type="submit" disabled={isCreatingUser} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 transition-colors">

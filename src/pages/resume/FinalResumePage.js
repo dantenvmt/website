@@ -79,6 +79,7 @@ const DraggablePreviewItem = ({ id, type, index, dataId, sectionId, children, di
 const FinalResumePage = () => {
     const { user } = useAuth(); // Access user state
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState(null);
     const {
         contact, setContact, contactToggles,
         summary, setSummary,
@@ -159,7 +160,9 @@ const FinalResumePage = () => {
     // --- 2. Fetch Data ---
     useEffect(() => {
         if (resumeId) {
-            fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`)
+            fetch(`https://renaisons.com/api/get_resume_details.php?resume_id=${resumeId}`, {
+                credentials: 'include'
+            })
                 .then(res => res.json())
                 .then(result => {
                     if (result.status === 'success' && result.data) {
@@ -180,7 +183,6 @@ const FinalResumePage = () => {
         }
     }, [resumeId, setContact, setExperiences, setProjects, setEducations, setSummary, setCertifications, setAwards, setSkills]);
 
-    // --- 3. Generate Granular Sections ---
     // --- 3. Generate Granular Sections ---
     useEffect(() => {
         const granular = [];
@@ -282,8 +284,17 @@ const FinalResumePage = () => {
     }, [orderedSections]);
 
     // --- 5. UPDATED PDF GENERATOR (Fixes Download Issue) ---
+    const handleBackToEditor = () => {
+        if (!user) {
+            setPendingAction('back');
+            setIsLoginModalOpen(true);
+            return;
+        }
+        navigate(`/resume/${resumeId}/contact`);
+    };
     const handleDownloadPDF = () => {
         if (!user) {
+            setPendingAction('download');
             setIsLoginModalOpen(true);
             return;
         }
@@ -519,7 +530,7 @@ const FinalResumePage = () => {
             );
         }
 
-        if (section.type === 'summary-content') return <p className="text-sm text-gray-800 break-words leading-normal whitespace-pre-wrap">{section.content}</p>;
+        if (section.type === 'summary-content') return <p className="text-xs text-gray-800 break-words leading-normal whitespace-pre-wrap">{section.content}</p>;
 
         if (section.type === 'skills-content') {
             return (
@@ -542,14 +553,19 @@ const FinalResumePage = () => {
                 onClose={() => setIsLoginModalOpen(false)}
                 onLoginSuccess={() => {
                     setIsLoginModalOpen(false);
-                    // Optionally trigger download immediately after login
-                    handleDownloadPDF();
+                    // Route to the correct action after logging in
+                    if (pendingAction === 'download') {
+                        handleDownloadPDF();
+                    } else if (pendingAction === 'back') {
+                        navigate(`/resume/${resumeId}/contact`);
+                    }
+                    setPendingAction(null); // reset
                 }}
             />
 
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-                    <button onClick={() => navigate(`/resume/${resumeId}/contact`)} className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">
+                    <button onClick={handleBackToEditor} className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">
                         Back to Editor
                     </button>
                     {/* The button now triggers the auth check */}

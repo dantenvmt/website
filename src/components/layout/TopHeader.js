@@ -105,7 +105,6 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-sm font-medium text-white truncate capitalize">{displayName}</p>
-                                        <p className="text-xs text-neutral-400 uppercase">{user.role}</p>
                                     </div>
                                 </div>
 

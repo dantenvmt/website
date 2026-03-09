@@ -16,7 +16,7 @@ import {
     attachClosestEdge,
     extractClosestEdge
 } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
-
+import html2canvas from 'html2canvas';
 // --- Helper Component for Page Layout ---
 const ResumePage = ({ children, pageNumber, totalPages, height = '8in' }) => (
     <div className="bg-white text-black font-serif shadow-lg my-4 relative transition-transform origin-top scale-[0.6] sm:scale-[0.7]md:scale-[0.8] xl:scale-95" style={{ width: '8.5in', minHeight: height, padding: '0.5in' }}>
@@ -182,7 +182,41 @@ const FinalResumePage = () => {
                 .catch(err => console.error(err));
         }
     }, [resumeId, setContact, setExperiences, setProjects, setEducations, setSummary, setCertifications, setAwards, setSkills]);
+    // --- Generate and Save Screenshot ---
+    useEffect(() => {
+        // Wait a brief moment for the DOM and fonts to fully render
+        const timer = setTimeout(async () => {
+            if (hiddenPreviewRef.current && orderedSections.length > 0) {
+                try {
+                    // Take a screenshot of the hidden preview div
+                    const canvas = await html2canvas(hiddenPreviewRef.current, {
+                        scale: 0.5, // Scale down to save database space/bandwidth
+                        useCORS: true,
+                        logging: false
+                    });
 
+                    // Convert canvas to a Base64 JPEG string
+                    const base64Image = canvas.toDataURL('image/jpeg', 0.7);
+
+                    // TODO: Send this to your backend to save it
+
+                    await fetch('https://renaisons.com/api/save_thumbnail.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            resume_id: resumeId,
+                            thumbnail: base64Image
+                        })
+                    });
+
+                } catch (error) {
+                }
+            }
+        }, 2000); // 2 second delay to ensure everything is loaded
+
+        return () => clearTimeout(timer);
+    }, [orderedSections, contact]); // Re-run if the resume content changes
     // --- 3. Generate Granular Sections ---
     useEffect(() => {
         const granular = [];
@@ -584,10 +618,15 @@ const FinalResumePage = () => {
                                         <h1 className="text-xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>
                                         <div className="text-xs text-gray-700 mt-2">
                                             <p>{[
-                                                contactToggles.city && contact.city,
-                                                contactToggles.state && contact.state,
-                                                contactToggles.country && contact.country
-                                            ].filter(Boolean).join(', ') + ' | ' + contact.email + (contactToggles.phone ? ' | ' + contact.phone : '')}</p>
+                                                [
+                                                    contactToggles.city && contact.city,
+                                                    contactToggles.state && contact.state,
+                                                    contactToggles.country && contact.country
+                                                ].filter(Boolean).join(', '),
+                                                contact.email,
+                                                contactToggles.phone && contact.phone,
+                                                contactToggles.linkedin && contact.linkedin && `linkedin.com/in/${contact.linkedin}`
+                                            ].filter(Boolean).join('  |  ')}</p>
                                         </div>
                                     </header>
                                 )}
@@ -617,7 +656,7 @@ const FinalResumePage = () => {
                 </div>
 
                 {/* --- HIDDEN CALCULATION AREA --- */}
-                <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, width: '8.5in' }}>
+                <div ref={hiddenPreviewRef} style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '8.5in' }}>
                     <div className="bg-white text-black font-serif" style={{ width: '8.5in', minHeight: '11in', padding: '1in' }}>
                         <header className="text-center mb-6">
                             <h1 className="text-2xl font-bold tracking-wider text-gray-900">{contact.fullName || "Your Name"}</h1>

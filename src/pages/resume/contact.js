@@ -3,10 +3,8 @@ import { useParams } from 'react-router-dom';
 import SaveButton from '../../components/common/SaveButton';
 import FormInput from '../../components/resume/FormInput';
 import Toggle from '../../components/resume/Toggle';
-import FormSelect from '../../components/resume/FormSelect';
 import { useResume } from '../../context/ResumeContext';
 import FeedbackModal from '../../components/common/FeedbackModal';
-
 
 const Contact = () => {
     const { contact, setContact, contactToggles, setContactToggles } = useResume();
@@ -43,7 +41,6 @@ const Contact = () => {
             showModal('Invalid Input', 'Please enter a valid email address.');
             return;
         }
-
 
         const phoneRegex = /^(\+1\s?)?(\([0-9]{3}\)|[0-9]{3})([\s.-]?[0-9]{3})([\s.-]?[0-9]{4})$/;
         if (contact.phone && !phoneRegex.test(contact.phone)) {
@@ -140,44 +137,53 @@ const Contact = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <FormInput label="Personal Website or Relevant Link" name="website" value={contact.website} onChange={handleInputChange} placeholder="https://www.johndoe.com" />
-                        <FormSelect
-                            label="Country"
-                            name="country"
-                            value={contact.country}
-                            onChange={handleInputChange}
-                            showOnResume={contactToggles.country}
-                            onToggle={() => handleToggle('country')}
-                        >
-                            <option value="">Select a country</option>
-                            <option>United States</option>
-                            <option>Canada</option>
-                        </FormSelect>
+                        <div className="flex-1">
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="country" className="block text-xs font-bold text-gray-400 uppercase">Country</label>
+                                <Toggle label="Show on resume" checked={contactToggles.country} onChange={() => handleToggle('country')} />
+                            </div>
+                            <input
+                                type="text"
+                                id="country"
+                                name="country"
+                                value={contact.country}
+                                onChange={handleInputChange}
+                                placeholder="United States"
+                                className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <FormSelect
-                            label="State"
-                            name="state"
-                            value={contact.state}
-                            onChange={handleInputChange}
-                            showOnResume={contactToggles.state}
-                            onToggle={() => handleToggle('state')}
-                        >
-                            <option value="">Select a state</option>
-                            <option>Texas</option>
-                            <option>California</option>
-                        </FormSelect>
-                        <FormSelect
-                            label="City"
-                            name="city"
-                            value={contact.city}
-                            onChange={handleInputChange}
-                            showOnResume={contactToggles.city}
-                            onToggle={() => handleToggle('city')}
-                        >
-                            <option value="">Select a city</option>
-                            <option>Richardson</option>
-                            <option>Dallas</option>
-                        </FormSelect>
+                        <div className="flex-1">
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="state" className="block text-xs font-bold text-gray-400 uppercase">State</label>
+                                <Toggle label="Show on resume" checked={contactToggles.state} onChange={() => handleToggle('state')} />
+                            </div>
+                            <input
+                                type="text"
+                                id="state"
+                                name="state"
+                                value={contact.state}
+                                onChange={handleInputChange}
+                                placeholder="Texas"
+                                className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="city" className="block text-xs font-bold text-gray-400 uppercase">City</label>
+                                <Toggle label="Show on resume" checked={contactToggles.city} onChange={() => handleToggle('city')} />
+                            </div>
+                            <input
+                                type="text"
+                                id="city"
+                                name="city"
+                                value={contact.city}
+                                onChange={handleInputChange}
+                                placeholder="Dallas"
+                                className="w-full bg-[#0f172a] border border-gray-600 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
                     </div>
                     <div className="flex justify-end pt-4">
                         <SaveButton onClick={handleSave}>SAVE BASIC INFO</SaveButton>

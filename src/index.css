@@ -14,4 +14,20 @@
     span {
         overflow-wrap: break-word;
     }
+
+    /* The glowing bruh1 background */
+    body {
+        min-height: 100vh;
+        background-color: hsl(226, 28%, 6%);
+        background-image:
+            radial-gradient(980px 680px at -12% -14%,
+                hsla(188, 100%, 47%, 0.16),
+                transparent 62%),
+            radial-gradient(760px 520px at 108% -10%,
+                hsla(235, 76%, 62%, 0.1),
+                transparent 64%);
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        color: hsl(210, 20%, 95%);
+    }
 }

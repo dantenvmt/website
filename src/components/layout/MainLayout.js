@@ -11,7 +11,7 @@ const MainLayout = () => {
 
 
     return (
-        <div className="bg-black text-white font-sans antialiased flex min-h-screen">
+        <div className="text-white font-sans antialiased flex min-h-screen">
             <SideNav
                 isNavOpen={isNavOpen}
                 isDesktopNavOpen={isDesktopNavOpen}

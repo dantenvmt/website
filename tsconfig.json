@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "baseUrl": "src"
+  },
+  "include": [
+    "src",
+    "../../files_for_job_board/API-Based-Scraper-frontend-main/API-Based-Scraper-frontend-main/src/api/client.ts",
+    "../../files_for_job_board/API-Based-Scraper-frontend-main/API-Based-Scraper-frontend-main/src/api/types.ts",
+    "../../files_for_job_board/API-Based-Scraper-frontend-main/API-Based-Scraper-frontend-main/src/components/jobs",
+    "../../files_for_job_board/API-Based-Scraper-frontend-main/API-Based-Scraper-frontend-main/src/components/ui",
+    "../../files_for_job_board/API-Based-Scraper-frontend-main/API-Based-Scraper-frontend-main/src/components/filters"
+  ]
+}

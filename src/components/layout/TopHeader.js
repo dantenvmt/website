@@ -205,7 +205,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
 
     return (
         <>
-            <header className="flex-shrink-0 h-16 flex items-center justify-between md:justify-end px-6 border-b border-neutral-800 bg-black text-white">
+            <header className="flex-shrink-0 h-16 flex items-center justify-between md:justify-end px-6 border-b border-white/5 bg-[#0b0e14]/50 backdrop-blur-md text-white sticky top-0 z-30">
                 <div className="md:hidden">
                     <button onClick={() => setIsNavOpen(!isNavOpen)} className="p-1 rounded-md hover:bg-neutral-800">
                         <HamburgerIcon />

@@ -30,7 +30,7 @@ const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 })
 
 const HomePage = () => {
     return (
-        <div className="min-h-screen bg-black text-white font-sans">
+        <div className="min-h-screen text-white font-sans">
             {/* --- HERO SECTION --- */}
             <section className="py-20 px-6 max-w-5xl mx-auto text-center">
                 <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-10 text-white">

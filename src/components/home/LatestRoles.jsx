@@ -74,7 +74,7 @@ const LatestRoles = () => {
     const [currentPage, setCurrentPage] = useState(0);
 
     return (
-        <section className="py-12 bg-black px-6 md:px-12">
+        <section className="py-12 px-6 md:px-12">
             <div className="max-w-7xl mx-auto">
 
                 {/* Section Header */}

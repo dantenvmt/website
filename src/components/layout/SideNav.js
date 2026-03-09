@@ -119,9 +119,8 @@ const SideNav = ({ isNavOpen, isDesktopNavOpen, setIsNavOpen, setIsDesktopNavOpe
         setIsNavOpen(false);
     };
 
-    const desktopNavClasses = `hidden md:flex md:flex-col transition-all duration-300 ease-in-out ${isDesktopNavOpen ? 'w-64' : 'w-20'} bg-black h-screen sticky top-0`;
-    const mobileNavClasses = `fixed inset-y-0 left-0 z-40 flex flex-col transition-transform duration-300 ease-in-out bg-black transform ${isNavOpen ? 'translate-x-0' : '-translate-x-full'} w-64 md:hidden`;
-
+    const desktopNavClasses = `hidden md:flex md:flex-col transition-all duration-300 ease-in-out ${isDesktopNavOpen ? 'w-64' : 'w-20'} bg-[#0b0e14]/50 backdrop-blur-md border-r border-white/5 h-screen sticky top-0`;
+    const mobileNavClasses = `fixed inset-y-0 left-0 z-40 flex flex-col transition-transform duration-300 ease-in-out bg-[#0b0e14]/90 backdrop-blur-xl border-r border-white/5 transform ${isNavOpen ? 'translate-x-0' : '-translate-x-full'} w-64 md:hidden`;
     return (
         <>
             <aside className={mobileNavClasses}>

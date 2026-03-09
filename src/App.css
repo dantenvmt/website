@@ -37,3 +37,18 @@
     transform: rotate(360deg);
   }
 }
+
+body {
+  min-height: 100vh;
+  background-color: #0b0e14;
+  background-image:
+    radial-gradient(980px 680px at -12% -14%,
+      rgba(0, 229, 255, 0.16),
+      transparent 62%),
+    radial-gradient(760px 520px at 108% -10%,
+      rgba(90, 100, 230, 0.1),
+      transparent 64%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: #f1f4f8;
+}

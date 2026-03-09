@@ -11,7 +11,7 @@ const Footer = () => {
     const companyName = "Renaisons";
 
     return (
-        <footer className="bg-black py-8">
+        <footer className="py-8">
             <div className="max-w-7xl mx-auto px-8 md:px-12">
                 {/* Bottom Bar */}
                 <div className="mt-8 flex flex-col md:flex-row justify-between items-center text-sm text-neutral-500">

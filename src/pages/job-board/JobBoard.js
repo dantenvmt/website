@@ -31,7 +31,7 @@ const JOB_SOURCES = [
     { value: 'HN RSS', label: 'HN RSS' },
 ];
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://renaisons.com';
 
 const api = {
     jobs: {
@@ -41,7 +41,8 @@ const api = {
             if (location) params.append('location', location);
             if (source) params.append('source', source);
             if (remote) params.append('remote', 'true');
-            const res = await fetch(`${API_URL}/api/v1/jobs?${params}`);
+            // CHANGE THIS LINE:
+            const res = await fetch(`${API_URL}/api/get_jobs.php?${params}`);
             if (!res.ok) throw new Error('Failed to fetch jobs');
             return res.json();
         }
@@ -89,7 +90,7 @@ function useJobsList(filters) {
         queryKey: ['jobs', filters],
         queryFn: ({ pageParam = 0 }) => api.jobs.list({ ...filters, pageParam }),
         getNextPageParam: (lastPage, allPages) => {
-            if (!lastPage || lastPage.length < 12) return undefined;
+            if (!lastPage || !lastPage.data || lastPage.data.length < 12) return undefined;
             return allPages.length * 12;
         }
     });

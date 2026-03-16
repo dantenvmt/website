@@ -1,147 +1,168 @@
-import React, { useState } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-// Mock Data based on your screenshot
-const rolesData = [
-    {
-        id: 1,
-        title: "Technical Professionals for Paid Research...",
-        rate: "$150",
-        hiredCount: 51,
-        avatars: ['bg-blue-500', 'bg-red-500', 'bg-indigo-500'],
-        initials: ['J', 'S', 'B']
-    },
-    {
-        id: 2,
-        title: "Lawyers",
-        rate: "$90-$150/hr",
-        hiredCount: 43,
-        avatars: ['bg-orange-500', 'bg-teal-500', 'bg-purple-500'],
-        initials: ['C', 'A', 'T']
-    },
-    {
-        id: 3,
-        title: "Sales Representatives, Wholesale and...",
-        rate: "$90-$150/hr",
-        hiredCount: 27,
-        avatars: ['bg-purple-500', 'bg-yellow-600', 'bg-green-500'],
-        initials: ['A', 'M', 'R']
-    },
-    {
-        id: 4,
-        title: "General and Operations Managers",
-        rate: "$90-$150/hr",
-        hiredCount: 4,
-        avatars: ['bg-gray-500', 'bg-blue-400', 'bg-indigo-600'],
-        initials: ['D', 'C', 'R']
-    },
-    {
-        id: 5,
-        title: "Personal Financial Advisors",
-        rate: "$90-$150/hr",
-        hiredCount: 47,
-        avatars: ['bg-red-600', 'bg-gray-600', 'bg-blue-900'],
-        initials: ['E', 'L', 'M']
-    },
-    {
-        id: 6,
-        title: "Securities, Commodities, and Financial...",
-        rate: "$90-$150/hr",
-        hiredCount: 40,
-        avatars: ['bg-pink-500', 'bg-green-600', 'bg-gray-700'],
-        initials: ['K', 'T', 'S']
-    },
-    {
-        id: 7,
-        title: "Project Management Specialists",
-        rate: "$90-$150/hr",
-        hiredCount: 26,
-        avatars: ['bg-orange-400', 'bg-pink-600', 'bg-purple-600'],
-        initials: ['P', 'Y', 'J']
-    },
-    {
-        id: 8,
-        title: "Software Engineer (Code QA)",
-        rate: "$70-$120/hr",
-        hiredCount: 54,
-        avatars: ['bg-purple-400', 'bg-blue-600', 'bg-orange-500'],
-        initials: ['B', 'N', 'D']
-    }
+const API_URL = process.env.REACT_APP_API_URL || 'https://renaisons.com';
+
+const AVATAR_COLORS = [
+    'bg-cyan-500',
+    'bg-fuchsia-500',
+    'bg-emerald-500',
+    'bg-orange-500',
+    'bg-violet-500',
+    'bg-sky-500',
+    'bg-pink-500',
 ];
 
+const FIRST_NAMES = [
+    'Liam', 'Noah', 'Ethan', 'Mia', 'Olivia', 'Ava', 'Sophia', 'Emma',
+    'Lucas', 'Mason', 'Logan', 'Chloe', 'Ella', 'Grace', 'Nora', 'Leo',
+    'Zoe', 'Aiden', 'Aria', 'Ivy', 'Ezra', 'Ruby', 'Jack', 'Mila'
+];
+
+const LAST_NAMES = [
+    'Nguyen', 'Smith', 'Johnson', 'Lee', 'Patel', 'Tran', 'Kim', 'Garcia',
+    'Brown', 'Davis', 'Wilson', 'Lopez', 'Hall', 'Young', 'Allen', 'King',
+    'Wright', 'Scott', 'Flores', 'Hill', 'Adams', 'Baker', 'Rivera', 'Cruz'
+];
+
+const getInitials = (name = '') => {
+    return name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('');
+};
+
+const randomFromArray = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+const createRandomName = () => `${randomFromArray(FIRST_NAMES)} ${randomFromArray(LAST_NAMES)}`;
+
+const createApplicantNames = () => [createRandomName(), createRandomName(), createRandomName()];
+
+const createAppliedCount = () => Math.floor(Math.random() * 100) + 1;
+
 const LatestRoles = () => {
-    // Pagination states (ready for when you add more than 8 items)
-    const [currentPage, setCurrentPage] = useState(0);
+    const navigate = useNavigate();
+    const [jobs, setJobs] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchLatestJobs = async () => {
+            try {
+                setIsLoading(true);
+                setError('');
+
+                const params = new URLSearchParams({
+                    offset: '0',
+                    limit: '8',
+                });
+
+                const res = await fetch(`${API_URL}/api/get_jobs.php?${params.toString()}`);
+                if (!res.ok) throw new Error('Failed to fetch latest jobs');
+
+                const data = await res.json();
+                setJobs(Array.isArray(data?.data) ? data.data.slice(0, 8) : []);
+            } catch (err) {
+                setError('Could not load latest roles.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchLatestJobs();
+    }, []);
+
+    const roleCards = useMemo(() => {
+        return jobs.map((job, index) => ({
+            ...job,
+            appliedCount: createAppliedCount(),
+            applicants: createApplicantNames(),
+            cardKey: `${job.id || index}-${job.title || 'job'}-${index}`,
+        }));
+    }, [jobs]);
+
+    const handleOpenJobBoard = (job) => {
+        navigate(`/job_board?q=${encodeURIComponent(job.title || '')}`);
+    };
 
     return (
-        <section className="py-12 px-6 md:px-12">
-            <div className="max-w-7xl mx-auto">
-
-                {/* Section Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-medium text-white">Latest roles</h2>
-
-                    {/* Navigation Arrows */}
-                    <div className="flex space-x-2">
-                        <button className="p-1.5 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">
-                            <ChevronLeftIcon className="h-4 w-4" />
-                        </button>
-                        <button className="p-1.5 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">
-                            <ChevronRightIcon className="h-4 w-4" />
-                        </button>
-                    </div>
+        <section className="px-6 pb-16">
+            <div className="mx-auto max-w-7xl">
+                <div className="mb-5">
+                    <h2 className="text-[28px] font-semibold text-white">Latest roles</h2>
                 </div>
 
-                {/* Grid Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {rolesData.map((role) => (
-                        <div
-                            key={role.id}
-                            className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 flex flex-col justify-between hover:border-neutral-700 transition-colors group cursor-pointer"
-                        >
-                            {/* Top Content */}
-                            <div>
-                                <h3 className="text-sm font-medium text-white truncate" title={role.title}>
-                                    {role.title}
-                                </h3>
-                                <p className="text-sm text-neutral-400 mt-1">
-                                    {role.rate}
-                                </p>
-                            </div>
+                {isLoading ? (
+                    <div className="flex h-28 items-center justify-center rounded-2xl border border-[#333742] bg-[#14171f]/80">
+                        <div className="flex items-center gap-2 text-[#94a3b8]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading latest roles...
+                        </div>
+                    </div>
+                ) : error ? (
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                        {error}
+                    </div>
+                ) : roleCards.length === 0 ? (
+                    <div className="rounded-2xl border border-[#333742] bg-[#14171f]/80 p-8 text-center text-[#94a3b8]">
+                        No roles available right now.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {roleCards.map((job, index) => (
+                            <motion.button
+                                key={job.cardKey}
+                                type="button"
+                                onClick={() => handleOpenJobBoard(job)}
+                                initial={{ opacity: 0, y: 10 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, amount: 0.2 }}
+                                transition={{ duration: 0.25, delay: index * 0.03 }}
+                                whileHover={{ y: -4 }}
+                                whileTap={{ scale: 0.99 }}
+                                className="group flex h-[140px] flex-col justify-between rounded-2xl border border-[#333742] bg-[#14171f]/90 px-4 py-4 text-left transition-all hover:border-[#00e5ff]/35 hover:shadow-[0_12px_30px_-20px_rgba(0,229,255,0.35)]"
+                            >
+                                <div>
+                                    <h3 className="line-clamp-2 text-[15px] font-semibold leading-6 text-[#f1f4f8]">
+                                        {job.title || 'Untitled Role'}
+                                    </h3>
 
-                            {/* Bottom Content */}
-                            <div className="mt-8 flex items-center justify-between">
-
-                                {/* Avatar Group & Hire Count */}
-                                <div className="flex items-center">
-                                    <div className="flex -space-x-2 overflow-hidden">
-                                        {role.avatars.map((colorClass, idx) => (
-                                            <div
-                                                key={idx}
-                                                className={`inline-block h-6 w-6 rounded-full ring-2 ring-neutral-900 flex items-center justify-center text-[10px] font-bold text-white ${colorClass}`}
-                                            >
-                                                {role.initials[idx]}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <span className="text-xs text-neutral-500 ml-3">
-                                        {role.hiredCount} hired recently
-                                    </span>
+                                    <p className="mt-1 text-[14px] text-[#94a3b8]">
+                                        {job.salary || 'Compensation not listed'}
+                                    </p>
                                 </div>
 
-                                {/* Apply Action */}
-                                <button className="text-sm font-medium text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-indigo-300">
-                                    Apply
-                                </button>
-                                {/* Fallback visible text for mobile (doesn't rely on hover) */}
-                                <span className="text-sm font-medium text-neutral-500 group-hover:hidden md:hidden">
-                                    Apply
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center min-w-0">
+                                        <div className="flex -space-x-2 shrink-0">
+                                            {job.applicants.slice(0, 3).map((name, avatarIndex) => (
+                                                <div
+                                                    key={`${job.cardKey}-avatar-${avatarIndex}`}
+                                                    className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#14171f] text-[9px] font-bold text-white ${AVATAR_COLORS[avatarIndex % AVATAR_COLORS.length]}`}
+                                                    title={name}
+                                                >
+                                                    {getInitials(name)}
+                                                </div>
+                                            ))}
+                                        </div>
 
+                                        <span className="ml-2 truncate text-[13px] text-[#94a3b8]">
+                                            {job.appliedCount} applied recently
+                                        </span>
+                                    </div>
+
+                                    <span className="ml-3 shrink-0 text-[14px] font-medium text-[#cbd5e1] transition-colors group-hover:text-[#00e5ff]">
+                                        Apply
+                                    </span>
+                                </div>
+                            </motion.button>
+                        ))}
+                    </div>
+                )}
             </div>
         </section>
     );

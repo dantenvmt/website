@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useInfiniteQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -84,7 +85,6 @@ const api = {
 // --------------------------------------------------------------------------
 // Hooks
 // --------------------------------------------------------------------------
-
 function useJobsList(filters) {
     return useInfiniteQuery({
         queryKey: ['jobs', filters],
@@ -445,18 +445,37 @@ const FilterBar = ({ filters, setFilters }) => {
     const [localQ, setLocalQ] = useState(filters.q);
     const debouncedQ = useDebounce(localQ, 400);
 
-    useEffect(() => { setFilters(prev => ({ ...prev, q: debouncedQ })); }, [debouncedQ, setFilters]);
+    useEffect(() => {
+        setLocalQ(filters.q || '');
+    }, [filters.q]);
+
+    useEffect(() => {
+        setFilters(prev => {
+            if (prev.q === debouncedQ) return prev;
+            return { ...prev, q: debouncedQ };
+        });
+    }, [debouncedQ, setFilters]);
 
     return (
         <div className="flex flex-col gap-4 rounded-[1.8rem] border border-[#333742] bg-[#14171f]/80 p-5 shadow-lg backdrop-blur-md lg:flex-row lg:items-center">
             <div className="relative flex-1 group">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#00e5ff] transition-colors" />
-                <Input placeholder="Search roles, skills, or companies..." value={localQ} onChange={(e) => setLocalQ(e.target.value)} className="pl-9" />
+                <Input
+                    placeholder="Search roles, skills, or companies..."
+                    value={localQ}
+                    onChange={(e) => setLocalQ(e.target.value)}
+                    className="pl-9"
+                />
             </div>
 
             <div className="relative w-full lg:w-48 group">
                 <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#00e5ff] transition-colors" />
-                <Input placeholder="Location" value={filters.location} onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))} className="pl-9" />
+                <Input
+                    placeholder="Location"
+                    value={filters.location}
+                    onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                    className="pl-9"
+                />
             </div>
 
             <div className="relative w-full lg:w-48">
@@ -471,12 +490,24 @@ const FilterBar = ({ filters, setFilters }) => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#94a3b8] pointer-events-none" />
             </div>
 
-            <Button variant={filters.remote ? "default" : "outline"} onClick={() => setFilters(prev => ({ ...prev, remote: !prev.remote }))} className="w-full lg:w-auto shrink-0">
+            <Button
+                variant={filters.remote ? "default" : "outline"}
+                onClick={() => setFilters(prev => ({ ...prev, remote: !prev.remote }))}
+                className="w-full lg:w-auto shrink-0"
+            >
                 Remote Only
             </Button>
 
             {(filters.q || filters.location || filters.source || filters.remote) && (
-                <Button variant="ghost" onClick={() => { setLocalQ(''); setFilters({ q: '', location: '', source: '', remote: false }); }}>Clear</Button>
+                <Button
+                    variant="ghost"
+                    onClick={() => {
+                        setLocalQ('');
+                        setFilters({ q: '', location: '', source: '', remote: false });
+                    }}
+                >
+                    Clear
+                </Button>
             )}
         </div>
     );
@@ -487,7 +518,24 @@ const FilterBar = ({ filters, setFilters }) => {
 // --------------------------------------------------------------------------
 
 function JobsPage() {
-    const [filters, setFilters] = useState({ q: '', location: '', source: '', remote: false });
+    const [searchParams] = useSearchParams();
+
+    const [filters, setFilters] = useState({
+        q: searchParams.get('q') || '',
+        location: '',
+        source: '',
+        remote: false
+    });
+
+    useEffect(() => {
+        const q = searchParams.get('q') || '';
+
+        setFilters(prev => {
+            if (prev.q === q) return prev;
+            return { ...prev, q };
+        });
+    }, [searchParams]);
+
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useJobsList(filters);
     const jobs = useMemo(() => data?.pages.flatMap(p => p.data) || [], [data]);
 

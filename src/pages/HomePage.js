@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LatestRoles from '../components/home/LatestRoles'; // Make sure this path matches your folder structure
-
+import { useNavigate } from 'react-router-dom';
 const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 }) => {
     const [count, setCount] = useState(0);
 
@@ -29,6 +29,25 @@ const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 })
 };
 
 const HomePage = () => {
+    const navigate = useNavigate();
+    const [jobQuery, setJobQuery] = useState('');
+
+    const handleJobSearch = () => {
+        const trimmed = jobQuery.trim();
+
+        if (!trimmed) {
+            navigate('/job_board');
+            return;
+        }
+
+        navigate(`/job_board?q=${encodeURIComponent(trimmed)}`);
+    };
+
+    const handleJobSearchKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            handleJobSearch();
+        }
+    };
     return (
         <div className="min-h-screen text-white font-sans">
             {/* --- HERO SECTION --- */}
@@ -70,7 +89,10 @@ const HomePage = () => {
                 <div className="max-w-xl mx-auto mb-10">
                     <input
                         type="text"
-                        placeholder="What role are you looking for?"
+                        value={jobQuery}
+                        onChange={(e) => setJobQuery(e.target.value)}
+                        onKeyDown={handleJobSearchKeyDown}
+                        placeholder="Search roles like Data Analyst"
                         className="w-full bg-neutral-900 border border-neutral-800 rounded-full py-4 px-8 text-base text-white placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-[#06b6d4] transition-all"
                     />
                 </div>
@@ -79,6 +101,8 @@ const HomePage = () => {
                 <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                     {/* Search Jobs Button */}
                     <button
+                        type="button"
+                        onClick={handleJobSearch}
                         className="w-full sm:w-auto bg-white text-black px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-neutral-200 hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
                     >
                         Search Jobs

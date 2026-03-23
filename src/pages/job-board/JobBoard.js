@@ -9,7 +9,7 @@ import {
     X, ChevronUp, Heart, WandSparkles, Loader2, Trash2, ExternalLink,
     Upload, FileText, Sparkles, BarChart3, Compass, ShieldCheck, ChevronDown
 } from 'lucide-react';
-
+import DOMPurify from 'dompurify';
 function cn(...inputs) {
     return twMerge(clsx(inputs));
 }
@@ -33,16 +33,16 @@ const JOB_SOURCES = [
 ];
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://renaisons.com';
-
+const PAGE_SIZE = 48;
 const api = {
     jobs: {
         list: async ({ pageParam = 0, q, location, source, remote }) => {
-            const params = new URLSearchParams({ offset: pageParam, limit: 12 });
+            const params = new URLSearchParams({ offset: pageParam, limit: PAGE_SIZE });
             if (q) params.append('q', q);
             if (location) params.append('location', location);
             if (source) params.append('source', source);
             if (remote) params.append('remote', 'true');
-            // CHANGE THIS LINE:
+
             const res = await fetch(`${API_URL}/api/get_jobs.php?${params}`);
             if (!res.ok) throw new Error('Failed to fetch jobs');
             return res.json();
@@ -81,7 +81,64 @@ const api = {
         }
     }
 };
+function formatSalary(job) {
+    if (job.salary) return job.salary;
 
+    const min = job.salary_min ? Number(job.salary_min) : null;
+    const max = job.salary_max ? Number(job.salary_max) : null;
+
+    const formatNumber = (value) =>
+        new Intl.NumberFormat('en-US', {
+            maximumFractionDigits: 0,
+        }).format(value);
+
+    if (min && max) return `$${formatNumber(min)} - $${formatNumber(max)}`;
+    if (min) return `$${formatNumber(min)}+`;
+    if (max) return `Up to $${formatNumber(max)}`;
+
+    return null;
+}
+
+function getWorkTypeBadges(job) {
+    const badges = [];
+
+    if (job.remote) badges.push('Remote');
+
+    const text = `${job.employment_type || ''} ${job.job_type || ''} ${job.type || ''}`.toLowerCase();
+
+    if (text.includes('full')) badges.push('Full-time');
+    if (text.includes('part')) badges.push('Part-time');
+    if (text.includes('contract')) badges.push('Contract');
+    if (text.includes('intern')) badges.push('Internship');
+
+    return [...new Set(badges)];
+}
+
+function formatExperience(job) {
+    if (job.years_experience) {
+        return `${job.years_experience} yrs`;
+    }
+
+    if (job.experience_years) {
+        return `${job.experience_years} yrs`;
+    }
+
+    if (job.seniority) {
+        const value = String(job.seniority).toLowerCase();
+
+        if (value.includes('intern')) return '0-1 yrs';
+        if (value.includes('junior') || value.includes('entry')) return '0-2 yrs';
+        if (value.includes('associate')) return '1-3 yrs';
+        if (value.includes('mid')) return '2-5 yrs';
+        if (value.includes('senior')) return '5+ yrs';
+        if (value.includes('staff')) return '7+ yrs';
+        if (value.includes('principal')) return '8+ yrs';
+        if (value.includes('lead')) return '6+ yrs';
+        if (value.includes('manager')) return '5+ yrs';
+    }
+
+    return null;
+}
 // --------------------------------------------------------------------------
 // Hooks
 // --------------------------------------------------------------------------
@@ -90,10 +147,54 @@ function useJobsList(filters) {
         queryKey: ['jobs', filters],
         queryFn: ({ pageParam = 0 }) => api.jobs.list({ ...filters, pageParam }),
         getNextPageParam: (lastPage, allPages) => {
-            if (!lastPage || !lastPage.data || lastPage.data.length < 12) return undefined;
-            return allPages.length * 12;
+            if (!lastPage || !lastPage.data || lastPage.data.length < PAGE_SIZE) return undefined;
+            return allPages.length * PAGE_SIZE;
         }
     });
+}
+function getTimeAgo(dateValue) {
+    if (!dateValue) return 'Recent';
+
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return 'Recent';
+
+    const now = new Date();
+    const diffMs = now - date;
+
+    if (diffMs < 0) return 'Recent';
+
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    const week = 7 * day;
+    const month = 30 * day;
+
+    if (diffMs < minute) {
+        return 'Just now';
+    }
+
+    if (diffMs < hour) {
+        const mins = Math.floor(diffMs / minute);
+        return mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
+    }
+
+    if (diffMs < day) {
+        const hours = Math.floor(diffMs / hour);
+        return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    }
+
+    if (diffMs < week) {
+        const days = Math.floor(diffMs / day);
+        return days === 1 ? '1 day ago' : `${days} days ago`;
+    }
+
+    if (diffMs < month) {
+        const weeks = Math.floor(diffMs / week);
+        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    }
+
+    const months = Math.floor(diffMs / month);
+    return months === 1 ? '1 month ago' : `${months} months ago`;
 }
 
 function useSavedJobs() {
@@ -256,39 +357,191 @@ const SavedJobsDrawer = ({ isOpen, onClose, savedJobs, onSelectJob, onRemove, on
         </AnimatePresence>
     );
 };
+const COMPANY_LOGOS = {
+    Stripe: '/logos/stripe.png',
+    MongoDB: '/logos/mongodb.png',
+    Palantir: '/logos/palantir.png',
+    HubSpot: '/logos/hubspot.png',
+};
 
-const JobCard = ({ job, saved, onToggleSaved, onOptimizeRole, resumeReady, onClick }) => {
+function getCompanyInitials(company) {
+    if (!company) return '?';
+
+    return company
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word[0]?.toUpperCase())
+        .join('');
+}
+
+function getCompanyColor(company) {
+    const palettes = [
+        'from-cyan-500 to-blue-600',
+        'from-emerald-500 to-teal-600',
+        'from-violet-500 to-fuchsia-600',
+        'from-orange-500 to-red-600',
+        'from-sky-500 to-indigo-600',
+        'from-indigo-500 to-purple-600',
+    ];
+
+    const text = company || 'company';
+    let hash = 0;
+
+    for (let i = 0; i < text.length; i++) {
+        hash = text.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    return palettes[Math.abs(hash) % palettes.length];
+}
+
+const CompanyLogo = ({ company, logoUrl, size = 'md' }) => {
+    const [imgFailed, setImgFailed] = useState(false);
+
+    const sizeClasses = {
+        sm: 'h-9 w-9 rounded-lg text-xs',
+        md: 'h-10 w-10 rounded-xl text-sm',
+        lg: 'h-12 w-12 rounded-xl text-base',
+    };
+
+    const classes = sizeClasses[size] || sizeClasses.md;
+
+    if (logoUrl && !imgFailed) {
+        return (
+            <img
+                src={logoUrl}
+                alt={company || 'Company'}
+                className={`${classes} shrink-0 border border-[#333742] bg-[#0f172a] object-cover`}
+                onError={() => setImgFailed(true)}
+            />
+        );
+    }
+
     return (
-        <div onClick={() => onClick && onClick(job)} className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-[1.8rem] border border-[#333742] bg-[#14171f]/90 p-5 shadow-lg transition-all hover:-translate-y-1 hover:border-[#00e5ff]/40 hover:shadow-[#00e5ff]/10">
+        <div
+            className={`${classes} shrink-0 border border-[#333742] bg-gradient-to-br ${getCompanyColor(company)} flex items-center justify-center font-bold text-white`}
+        >
+            {getCompanyInitials(company)}
+        </div>
+    );
+};
+const JobCard = ({ job, saved, onToggleSaved, onOptimizeRole, resumeReady, onClick }) => {
+    const logoUrl = COMPANY_LOGOS[job.company] || job.company_logo_url || null;
+    const workTypeBadges = getWorkTypeBadges(job);
+    const experienceLabel = formatExperience(job);
+    const salaryLabel = formatSalary(job);
+
+    const companyName =
+        job.company && job.company.toUpperCase() !== 'UNKNOWN'
+            ? job.company
+            : 'Unknown Company';
+
+    return (
+        <div
+            onClick={() => onClick && onClick(job)}
+            className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-[1.8rem] border border-[#333742] bg-[#14171f]/90 p-5 shadow-lg transition-all hover:-translate-y-1 hover:border-[#00e5ff]/40 hover:shadow-[#00e5ff]/10"
+        >
             <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">{job.company || 'Unknown Company'}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                        <CompanyLogo
+                            company={job.company}
+                            logoUrl={logoUrl}
+                            size="md"
+                        />
+
+                        <div className="min-w-0">
+                            <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">
+                                {companyName}
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px]">{job.source || 'Web'}</Badge>
-                        <Button variant="ghost" size="icon" className={cn("h-8 w-8 rounded-full", saved && "bg-emerald-500/20 text-emerald-400")} onClick={(e) => { e.stopPropagation(); onToggleSaved(job); }}>
+                        {job.location ? (
+                            <Badge variant="outline" className="max-w-[140px] truncate">
+                                <MapPin className="mr-1 h-3 w-3" />
+                                {job.location}
+                            </Badge>
+                        ) : null}
+
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn("h-8 w-8 rounded-full", saved && "bg-emerald-500/20 text-emerald-400")}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleSaved(job);
+                            }}
+                        >
                             {saved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
                         </Button>
                     </div>
                 </div>
-                <h3 className="text-lg font-semibold leading-snug line-clamp-2 text-[#f1f4f8] group-hover:text-[#00e5ff] transition-colors">{job.title}</h3>
+
+                <h3 className="text-lg font-semibold leading-snug line-clamp-2 text-[#f1f4f8] group-hover:text-[#00e5ff] transition-colors">
+                    {job.title}
+                </h3>
+
                 <div className="flex flex-wrap gap-2">
-                    {job.salary ? <Badge variant="outline"><DollarSign className="mr-1 h-3 w-3" />{job.salary}</Badge> : null}
-                    {job.remote ? <Badge variant="outline">Remote</Badge> : null}
-                    {job.location ? <Badge variant="outline" className="max-w-[150px] truncate"><MapPin className="mr-1 h-3 w-3" />{job.location}</Badge> : null}
+                    {workTypeBadges.map((badge) => (
+                        <Badge key={badge} variant="outline">
+                            {badge}
+                        </Badge>
+                    ))}
+
+                    {experienceLabel ? (
+                        <Badge
+                            variant="default"
+                            className="bg-[#f5b301]/15 text-[#f5b301] border-[#f5b301]/20"
+                        >
+                            {experienceLabel}
+                        </Badge>
+                    ) : null}
+
+                    {salaryLabel ? (
+                        <Badge variant="outline">
+                            <DollarSign className="mr-1 h-3 w-3" />
+                            {salaryLabel}
+                        </Badge>
+                    ) : null}
                 </div>
             </div>
+
             <div className="mt-6 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{job.posted_at ? new Date(job.posted_at).toLocaleDateString() : 'Recent'}</span>
+                    <span>{getTimeAgo(job.posted_at || job.posted_date || job.created_at)}</span>
                 </div>
-                <Button variant="outline" size="sm" disabled={!resumeReady} onClick={(e) => { e.stopPropagation(); onOptimizeRole(job); }} className="gap-1.5 border-[#00e5ff]/30 text-[#00e5ff] bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20">
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!resumeReady}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onOptimizeRole(job);
+                    }}
+                    className="gap-1.5 border-[#00e5ff]/30 text-[#00e5ff] bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20"
+                >
                     <WandSparkles className="h-3.5 w-3.5" /> Optimize
                 </Button>
             </div>
         </div>
     );
 };
+function decodeHtmlEntities(value) {
+    if (!value) return '';
+
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
+}
+
+function getSafeDescriptionHtml(value) {
+    const decoded = decodeHtmlEntities(value || '');
+    return DOMPurify.sanitize(decoded);
+}
 
 const JobDetailDialog = ({ open, onOpenChange, job, saved, onToggleSaved, onOptimizeRole, aiSummary, aiSummaryLoading, optimization, optimizationLoading, resumeReady }) => {
     if (!open || !job) return null;
@@ -299,7 +552,14 @@ const JobDetailDialog = ({ open, onOpenChange, job, saved, onToggleSaved, onOpti
                     <div className="flex items-start justify-between border-b border-[#333742] p-6 bg-[#14171f]/95">
                         <div>
                             <h2 className="text-2xl font-bold leading-tight">{job.title}</h2>
-                            <p className="mt-1 text-[#94a3b8]">{job.company || 'Unknown Company'}</p>
+                            <div className="mt-2 flex items-center gap-3">
+                                <CompanyLogo
+                                    company={job.company}
+                                    logoUrl={COMPANY_LOGOS[job.company] || job.company_logo_url || null}
+                                    size="md"
+                                />
+                                <p className="text-[#94a3b8]">{job.company || 'Unknown Company'}</p>
+                            </div>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {job.location && <Badge variant="outline"><MapPin className="mr-1 h-3.5 w-3.5" />{job.location}</Badge>}
                                 {job.remote && <Badge variant="secondary">Remote</Badge>}
@@ -347,7 +607,12 @@ const JobDetailDialog = ({ open, onOpenChange, job, saved, onToggleSaved, onOpti
 
                         <div>
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-3">Description</h3>
-                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#94a3b8]">{job.description || 'No description available.'}</div>
+                            <div
+                                className="prose prose-invert max-w-none text-sm leading-relaxed text-[#94a3b8]"
+                                dangerouslySetInnerHTML={{
+                                    __html: getSafeDescriptionHtml(job.description || '<p>No description available.</p>')
+                                }}
+                            />
                         </div>
                     </div>
 
@@ -478,17 +743,6 @@ const FilterBar = ({ filters, setFilters }) => {
                 />
             </div>
 
-            <div className="relative w-full lg:w-48">
-                <select
-                    value={filters.source}
-                    onChange={(e) => setFilters(prev => ({ ...prev, source: e.target.value }))}
-                    className="flex h-10 w-full appearance-none cursor-pointer rounded-xl border border-[#333742] bg-[#14171f]/50 px-3 py-2 text-sm text-[#f1f4f8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]/50"
-                >
-                    <option value="">All Sources</option>
-                    {JOB_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#94a3b8] pointer-events-none" />
-            </div>
 
             <Button
                 variant={filters.remote ? "default" : "outline"}
@@ -537,7 +791,16 @@ function JobsPage() {
     }, [searchParams]);
 
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useJobsList(filters);
-    const jobs = useMemo(() => data?.pages.flatMap(p => p.data) || [], [data]);
+    const jobs = useMemo(() => {
+        const allJobs = data?.pages.flatMap((p) => p.data) || [];
+
+        return [...allJobs].sort((a, b) => {
+            const aDate = new Date(a.posted_at || a.posted_date || a.created_at || 0).getTime();
+            const bDate = new Date(b.posted_at || b.posted_date || b.created_at || 0).getTime();
+
+            return bDate - aDate;
+        });
+    }, [data]);
 
     const { savedJobs, isJobSaved, toggleSaved, unsaveJob, clearAll } = useSavedJobs();
 

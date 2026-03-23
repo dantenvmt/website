@@ -617,17 +617,36 @@ const JobDetailDialog = ({ open, onOpenChange, job, saved, onToggleSaved, onOpti
                     </div>
 
                     <div className="flex items-center justify-between border-t border-[#333742] bg-[#14171f] p-5">
-                        <Button variant="outline" disabled={!resumeReady || optimizationLoading} onClick={() => onOptimizeRole(job)} className="gap-2 border-[#00e5ff]/30 text-[#00e5ff] hover:bg-[#00e5ff]/10">
-                            {optimizationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                            Optimize For This Role
-                        </Button>
-                        <div className="flex gap-3">
-                            <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+                        {/* Left Side: Apply Button (Now using the Outline/Secondary style) */}
+                        <div>
                             {job.url && (
-                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#00e5ff] px-4 py-2 text-sm font-semibold text-[#0b0e14] transition-all hover:bg-[#00e5ff]/90 hover:scale-105 shadow-lg shadow-[#00e5ff]/20">
+                                <a
+                                    href={job.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#00e5ff]/30 px-4 py-2 text-sm font-medium text-[#00e5ff] transition-all hover:bg-[#00e5ff]/10"
+                                >
                                     Apply <ExternalLink className="h-4 w-4" />
                                 </a>
                             )}
+                        </div>
+
+                        {/* Right Side: Close & Optimize Buttons */}
+                        <div className="flex items-center gap-3">
+                            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                                Close
+                            </Button>
+
+                            {/* Optimize Button (Now using the Solid/Primary style) */}
+                            <Button
+
+                                disabled={!resumeReady || optimizationLoading}
+                                onClick={() => onOptimizeRole(job)}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border-0 bg-[#00e5ff] px-4 py-2 text-sm font-semibold text-[#0b0e14] shadow-lg shadow-[#00e5ff]/20 transition-all hover:scale-105 hover:bg-[#00e5ff]/90"
+                            >
+                                {optimizationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                                Optimize For This Role
+                            </Button>
                         </div>
                     </div>
                 </motion.div>

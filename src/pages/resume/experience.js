@@ -1,5 +1,4 @@
-// src/pages/resume/experience.js
-import React, { useCallback, useState } from 'react'; // Import useState
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import SaveButton from '../../components/common/SaveButton';
 import AddItemButton from '../../components/common/AddItemButton';
@@ -8,11 +7,10 @@ import DatePicker from '../../components/resume/DatePicker';
 import FormTextarea from '../../components/resume/FormTextarea';
 import { useResume } from '../../context/ResumeContext';
 import FeedbackModal from '../../components/common/FeedbackModal';
-// --- ExperienceItem Component ---
-// REMOVE the onSubmit handler and the SaveButton from this component
-const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite }) => {
+import AIWriteExperienceModal from '../../components/resume/AIWriteExperienceModal';
+
+const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite, noJd, aiWriteUsed }) => {
     const companyName = experience.company || 'THE COMPANY';
-    const remainingAiWrites = 3 - (experience.aiClickCount || 0);
 
     return (
         <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-8 mb-8">
@@ -24,12 +22,10 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite }) =>
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
             </div>
-            {/* REMOVED onSubmit from form */}
             <form className="space-y-6">
                 <FormInput label={`WHAT WAS YOUR ROLE AT ${companyName}? *`} name="role" value={experience.role} onChange={(e) => onUpdate(experience.id, { ...experience, role: e.target.value })} placeholder={'Data Scientist'} />
                 <FormInput label="FOR WHICH COMPANY DID YOU WORK? *" name="company" value={experience.company} onChange={(e) => onUpdate(experience.id, { ...experience, company: e.target.value })} placeholder={'Google'} />
 
-                {/* Date Pickers and Location */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{`HOW LONG WERE YOU WITH ${companyName}?`}</label>
@@ -51,20 +47,22 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite }) =>
                     <FormInput label={`WHERE WAS ${companyName} LOCATED?`} name="location" value={experience.location} onChange={(e) => onUpdate(experience.id, { ...experience, location: e.target.value })} placeholder={"Mountain View, CA"} />
                 </div>
 
-                {/* Bullets Textarea with AI Write */}
                 <div>
                     <div className="flex justify-between items-center mb-2">
                         <label className="block text-xs font-bold text-gray-400 uppercase">{`WHAT DID YOU DO AT ${companyName}?`}</label>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-col items-end gap-1">
                             <button
                                 type="button"
-                                onClick={() => onAiWrite(experience.id)}
-                                disabled={remainingAiWrites <= 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                onClick={() => !aiWriteUsed && onAiWrite(experience.id)}
+                                disabled={aiWriteUsed}
+                                className={`text-xs font-bold py-1 px-3 rounded-md ${aiWriteUsed ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                title={aiWriteUsed ? 'Already used for this job description' : ''}
                             >
-                                AI Write
+                                {aiWriteUsed ? 'AI Write Used' : 'AI Write'}
                             </button>
-                            <span className="text-xs text-gray-400">({remainingAiWrites} left)</span>
+                            {noJd && (
+                                <span className="text-xs text-red-400">Add a job description on the Final Resume page first.</span>
+                            )}
                         </div>
                     </div>
                     <FormTextarea
@@ -74,25 +72,20 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite }) =>
                         rows="8"
                     />
                 </div>
-
-                {/* --- REMOVED INDIVIDUAL SAVE BUTTON --- */}
-                {/*
-                <div className="flex justify-end">
-                    <SaveButton type="submit">SAVE TO EXPERIENCE</SaveButton>
-                </div>
-                */}
             </form>
         </div>
     );
 };
 
-
-// --- Experience Component (Main) ---
 const Experience = () => {
-    const { experiences, setExperiences, addExperience } = useResume();
+    const { experiences, setExperiences, addExperience, jobDescription } = useResume();
     const { resumeId } = useParams();
-    const [isSaving, setIsSaving] = useState(false); // Add saving state
+    const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
+    const [aiWriteModalOpen, setAiWriteModalOpen] = useState(false);
+    const [aiWriteUsed, setAiWriteUsed] = useState(false);
+    const [noJdWarningExpId, setNoJdWarningExpId] = useState(null);
+
     const updateExperience = useCallback((id, updatedData) => {
         setExperiences(currentExperiences =>
             currentExperiences.map(exp => (exp.id === id ? updatedData : exp))
@@ -107,27 +100,26 @@ const Experience = () => {
                 isOpen: true,
                 title: 'Action Not Allowed',
                 message: 'You must have at least one experience entry.',
-                isError: true
+                isError: true,
             });
         }
     };
 
-    // --- NEW FUNCTION: saveAllExperiences ---
     const saveAllExperiences = async () => {
         if (!resumeId) {
             setModalInfo({
                 isOpen: true,
                 title: 'Save Error',
                 message: 'Cannot save experience without a resume ID.',
-                isError: true
+                isError: true,
             });
             return;
         }
-        if (isSaving) return; // Prevent double clicks
+        if (isSaving) return;
         setIsSaving(true);
         let saveErrors = 0;
+
         const savePromises = experiences.map(exp => {
-            // Only save if it has a role or company (basic check for non-empty entry)
             if (exp.role || exp.company) {
                 return fetch('https://renaisons.com/api/save_experience.php', {
                     method: 'POST',
@@ -137,29 +129,25 @@ const Experience = () => {
                     .then(response => response.json())
                     .then(result => {
                         if (result.status === 'success' && result.experience_id && exp.id !== result.experience_id) {
-                            // Return the update needed for this experience
                             return { oldId: exp.id, newId: result.experience_id };
                         } else if (result.status !== 'success') {
-                            // Log errors for individual saves but continue
                             console.error(`Error saving experience "${exp.role || 'New'}": ${result.message}`);
-                            // Optionally collect errors to show user later
+                            saveErrors++;
                         }
-                        return null; // No update needed or error occurred
+                        return null;
                     })
                     .catch(error => {
                         console.error(`Network error saving experience "${exp.role || 'New'}":`, error);
-                        // Optionally collect errors
+                        saveErrors++;
                         return null;
                     });
             }
-            return Promise.resolve(null); // Resolve immediately for empty experiences
+            return Promise.resolve(null);
         });
 
         try {
             const results = await Promise.all(savePromises);
-
-            // Update local state with new IDs from the database
-            const updates = results.filter(Boolean); // Filter out nulls
+            const updates = results.filter(Boolean);
             if (updates.length > 0) {
                 setExperiences(currentExperiences =>
                     currentExperiences.map(exp => {
@@ -169,20 +157,19 @@ const Experience = () => {
                 );
             }
 
-            // --- REPLACE ALERTS WITH MODAL ---
             if (saveErrors > 0) {
                 setModalInfo({
                     isOpen: true,
                     title: 'Save Complete (with errors)',
-                    message: `Successfully saved ${experiences.length - saveErrors} entries. ${saveErrors} entries failed to save. Please check console for details.`,
-                    isError: true
+                    message: `Successfully saved ${experiences.length - saveErrors} entries. ${saveErrors} entries failed to save.`,
+                    isError: true,
                 });
             } else {
                 setModalInfo({
                     isOpen: true,
                     title: 'Success!',
                     message: 'All experience entries saved successfully.',
-                    isError: false // This will show the green/blue success style
+                    isError: false,
                 });
             }
         } catch (error) {
@@ -190,43 +177,72 @@ const Experience = () => {
                 isOpen: true,
                 title: 'Critical Error',
                 message: 'A network error occurred while saving. Please check your connection and try again.',
-                isError: true
+                isError: true,
             });
             console.error('Failed to save experiences:', error);
         } finally {
             setIsSaving(false);
         }
     };
-    // --- END NEW FUNCTION ---
+
+    useEffect(() => {
+        if (!resumeId || !jobDescription) { setAiWriteUsed(false); return; }
+        let hash = 0;
+        for (let i = 0; i < jobDescription.length; i++) {
+            hash = ((hash << 5) - hash) + jobDescription.charCodeAt(i);
+            hash |= 0;
+        }
+        setAiWriteUsed(!!localStorage.getItem(`aiwrite_${resumeId}_${hash}`));
+    }, [resumeId, jobDescription]);
+
+    const getAiWriteKey = () => {
+        if (!resumeId || !jobDescription) return null;
+        let hash = 0;
+        for (let i = 0; i < jobDescription.length; i++) {
+            hash = ((hash << 5) - hash) + jobDescription.charCodeAt(i);
+            hash |= 0;
+        }
+        return `aiwrite_${resumeId}_${hash}`;
+    };
 
     const handleAiWrite = (id) => {
-        // AI write logic remains the same
-        const experienceToUpdate = experiences.find(exp => exp.id === id);
-        const currentClickCount = experienceToUpdate.aiClickCount || 0;
-
-        if (currentClickCount >= 3) {
+        if (!jobDescription || !jobDescription.trim()) {
+            setNoJdWarningExpId(id);
+            return;
+        }
+        const key = getAiWriteKey();
+        if (key && localStorage.getItem(key)) {
             setModalInfo({
                 isOpen: true,
-                title: 'AI Limit Reached',
-                message: 'AI suggestion limit reached for this item.',
-                isError: true
+                title: 'AI Write Already Used',
+                message: "You've already used AI Write for this job description.",
+                isError: true,
             });
             return;
         }
+        setNoJdWarningExpId(null);
+        setAiWriteModalOpen(true);
+    };
 
-        const aiSuggestions = [
-            '• Leveraged machine learning models to increase sales forecasting accuracy by 25%.',
-            '• Designed and implemented a new data warehousing solution, reducing query times by 40%.',
-            '• Collaborated with product teams to define data-driven strategies for new feature development.'
-        ];
+    const handleAiGenerated = () => {
+        const key = getAiWriteKey();
+        if (key) {
+            localStorage.setItem(key, '1');
+            setAiWriteUsed(true);
+        }
+    };
 
-        const aiGeneratedText = aiSuggestions[currentClickCount];
-        const currentBullets = experienceToUpdate.bullets.trim();
-        const newBullets = (currentBullets === '•' || currentBullets === '')
-            ? aiGeneratedText
-            : `${currentBullets}\n${aiGeneratedText}`;
-
-        updateExperience(id, { ...experienceToUpdate, bullets: newBullets, aiClickCount: currentClickCount + 1 });
+    const handleAiInsert = (items) => {
+        items.forEach(({ bullet, experienceId }) => {
+            const exp = experiences.find(e => String(e.id) === String(experienceId));
+            if (!exp) return;
+            const currentBullets = exp.bullets ? exp.bullets.trim() : '';
+            const merged = (!currentBullets || currentBullets === '•')
+                ? bullet
+                : `${currentBullets}\n${bullet}`;
+            updateExperience(exp.id, { ...exp, bullets: merged });
+        });
+        setAiWriteModalOpen(false);
     };
 
     return (
@@ -239,22 +255,30 @@ const Experience = () => {
                     onClose={() => setModalInfo({ isOpen: false, message: '', title: '', isError: false })}
                 />
             )}
+            {aiWriteModalOpen && (
+                <AIWriteExperienceModal
+                    jobDescription={jobDescription}
+                    experiences={experiences}
+                    onInsert={handleAiInsert}
+                    onGenerated={handleAiGenerated}
+                    onClose={() => setAiWriteModalOpen(false)}
+                />
+            )}
             {experiences.map((exp, index) => (
                 <ExperienceItem
-                    key={exp.id} // Use the ID as key
+                    key={exp.id}
                     experience={exp}
                     index={index}
                     onUpdate={updateExperience}
                     onDelete={deleteExperience}
-                    // Removed onSave prop
                     onAiWrite={handleAiWrite}
+                    noJd={noJdWarningExpId === exp.id}
+                    aiWriteUsed={aiWriteUsed}
                 />
             ))}
             <AddItemButton onClick={addExperience}>
                 ADD ANOTHER EXPERIENCE
             </AddItemButton>
-
-            {/* --- ADDED MAIN SAVE BUTTON --- */}
             <div className="flex justify-center mt-8 pt-6 border-t border-gray-700">
                 <SaveButton onClick={saveAllExperiences} disabled={isSaving}>
                     {isSaving ? 'SAVING ALL...' : 'SAVE ALL EXPERIENCES'}

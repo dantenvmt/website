@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggleCurrent }) => {
+const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggleCurrent, toggleLabel = "Currently work here" }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [year, setYear] = useState(new Date().getFullYear());
     const wrapperRef = useRef(null);
@@ -8,12 +8,12 @@ const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggl
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
-    const startYear = startDate ? parseInt(startDate.split(' ')[1], 10) : null;
-    const startMonthName = startDate ? startDate.split(' ')[0] : null;
-    const startMonthIndex = startMonthName ? months.findIndex(m => m.startsWith(startMonthName)) : -1;
+    const startYear = startDate && startDate !== 'Present' ? parseInt(startDate.split('/')[1], 10) : null;
+    const startMonthIndex = startDate && startDate !== 'Present' ? parseInt(startDate.split('/')[0], 10) - 1 : -1;
 
-    const handleSelect = (month) => {
-        onSelect(`${month} ${year}`);
+    const handleSelect = (monthIndex) => {
+        const monthNum = String(monthIndex + 1).padStart(2, '0');
+        onSelect(`${monthNum}/${year}`);
         setIsOpen(false);
     };
 
@@ -62,7 +62,7 @@ const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggl
                                 <button
                                     key={month}
                                     type="button"
-                                    onClick={() => handleSelect(month.substring(0, 3))}
+                                    onClick={() => handleSelect(index)}
                                     className={`p-2 rounded-md text-sm ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
                                     disabled={isDisabled}
                                 >
@@ -73,7 +73,7 @@ const DatePicker = ({ value, onSelect, startDate, showToggle, isCurrent, onToggl
                     </div>
                     {showToggle && (
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                            <span className="text-sm">Currently work here</span>
+                            <span className="text-sm">{toggleLabel}</span>
                             <button
                                 type="button"
                                 onClick={onToggleCurrent}

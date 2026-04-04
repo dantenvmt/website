@@ -16,7 +16,7 @@ const initialExperiences = () => ([
     { id: Date.now(), role: '', company: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', aiUsesLeft: 3 }
 ]);
 const initialEducations = () => ([
-    { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }
+    { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', minor: '', gpa: '' }
 ]);
 const initialAwards = () => ([
     { id: Date.now(), name: '', organization: '', date: '', relevance: '' }
@@ -75,7 +75,7 @@ export const ResumeProvider = ({ children }) => {
     const setProjects = useMemo(() => mapAndSetData(setProjectsState), [mapAndSetData]);
 
     const addExperience = useCallback(() => setExperiencesState(prev => [...prev, { id: Date.now(), role: '', company: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', aiUsesLeft: 3 }]), []);
-    const addEducation = useCallback(() => setEducationsState(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', location: '', bullets: '• ', minor: '', gpa: '' }]), []);
+    const addEducation = useCallback(() => setEducationsState(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', minor: '', gpa: '' }]), []);
     const addAward = useCallback(() => setAwardsState(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]), []);
     const addCertificate = useCallback(() => setCertificationsState(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]), []);
     const addProject = useCallback(() => setProjectsState(prev => [...prev, { id: Date.now(), name: '', date: '', relevance: '' }]), []);

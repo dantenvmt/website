@@ -35,8 +35,12 @@ const EducationItem = ({ education, index, onUpdate, onDelete }) => {
                             />
                             <DatePicker
                                 value={education.endDate}
-                                onSelect={(date) => onUpdate(education.id, { ...education, endDate: date })}
+                                onSelect={(date) => onUpdate(education.id, { ...education, endDate: date, isCurrent: false })}
                                 startDate={education.startDate}
+                                showToggle={true}
+                                isCurrent={education.isCurrent}
+                                onToggleCurrent={() => onUpdate(education.id, { ...education, isCurrent: !education.isCurrent, endDate: !education.isCurrent ? 'Present' : '' })}
+                                toggleLabel="Currently studying here"
                             />
                         </div>
                     </div>

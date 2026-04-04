@@ -124,7 +124,7 @@ const EditorLayout = () => {
             const results = await Promise.all(promises);
             const updates = results.filter(Boolean);
             if (updates.length > 0 && setter) {
-                setter(prev => prev.map(p => {
+                setter(list.map(p => {
                     const u = updates.find(up => up.oldId === p.id);
                     return u ? { ...p, id: u.newId } : p;
                 }));

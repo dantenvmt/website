@@ -69,3 +69,19 @@ test('Generate button enables when all problems resolved with at least one to ge
 
     expect(screen.getByRole('button', { name: /generate bullets/i })).not.toBeDisabled();
 });
+
+test('clicking a keyword chip appends it to the story textarea', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+
+    // Select "No" for first problem to reveal story field and chips
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[0], { target: { value: 'no' } });
+
+    // Click the "stakeholder management" chip
+    const chip = screen.getAllByText(/\+ stakeholder management/i)[0];
+    fireEvent.click(chip);
+
+    const storyTextarea = screen.getByPlaceholderText(/briefly describe/i);
+    expect(storyTextarea.value).toBe('stakeholder management');
+});

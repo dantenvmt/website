@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SparklesIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const STEPS = {
@@ -140,6 +140,20 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         });
     };
 
+    const appendKeyword = (index, keyword) => {
+        setAnswers(prev => {
+            const updated = [...prev];
+            const current = updated[index].story;
+            updated[index] = { ...updated[index], story: current ? `${current} ${keyword}` : keyword };
+            return updated;
+        });
+    };
+
+    const keywordChips = useMemo(() => [
+        ...(aiAnalysis?.missingKeywords?.map(k => ({ text: k.keyword || k, type: 'missing' })) || []),
+        ...(aiAnalysis?.predictedKeywords?.map(k => ({ text: k.keyword || k, type: 'predicted' })) || []),
+    ], [aiAnalysis]);
+
     const toggleSelected = (index) => {
         setSelected(prev => {
             const updated = [...prev];
@@ -255,6 +269,29 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                                 ? 'Add any extra context for the AI (optional)'
                                                                 : 'Tell me about a time you solved this'}
                                                         </label>
+                                                        {keywordChips.length > 0 && (
+                                                            <div className="mb-2">
+                                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
+                                                                    Try to mention these keywords:
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {keywordChips.map(({ text, type }) => (
+                                                                        <button
+                                                                            key={text}
+                                                                            type="button"
+                                                                            onClick={() => appendKeyword(i, text)}
+                                                                            className={`px-2 py-0.5 text-xs font-semibold rounded-full border cursor-pointer transition-all hover:brightness-110 ${
+                                                                                type === 'missing'
+                                                                                    ? 'bg-red-950/30 text-red-300 border-red-900/50 hover:border-red-500'
+                                                                                    : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:border-purple-500'
+                                                                            }`}
+                                                                        >
+                                                                            + {text}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <textarea
                                                             className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
                                                             rows={3}

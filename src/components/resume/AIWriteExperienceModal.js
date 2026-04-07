@@ -355,6 +355,35 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
 
                     {step === STEPS.RESULTS && (
                         <div>
+                            {(() => {
+                                const allKeywords = [
+                                    ...(aiAnalysis?.missingKeywords?.map(k => k.keyword || k) || []),
+                                    ...(aiAnalysis?.predictedKeywords?.map(k => k.keyword || k) || []),
+                                ];
+                                const allBulletText = bullets.map(b => b.bullet.toLowerCase()).join(' ');
+                                const covered = allKeywords.filter(kw => allBulletText.includes(kw.toLowerCase()));
+                                const stillMissing = allKeywords.filter(kw => !allBulletText.includes(kw.toLowerCase()));
+
+                                return allKeywords.length > 0 ? (
+                                    <div className="mb-4 bg-[#0f172a] border border-gray-700 rounded-lg p-4">
+                                        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-2">
+                                            Keyword Coverage
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {covered.map(kw => (
+                                                <span key={kw} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-950/30 text-green-300 border border-green-900/50">
+                                                    ✓ {kw}
+                                                </span>
+                                            ))}
+                                            {stillMissing.map(kw => (
+                                                <span key={kw} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-950/30 text-red-300 border border-red-900/50">
+                                                    ✗ {kw}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null;
+                            })()}
                             <p className="text-sm text-gray-400 mb-4">Select the bullets you want to add and assign each to an experience:</p>
                             <div className="space-y-3">
                                 {bullets.map((b, i) => (

@@ -85,3 +85,44 @@ test('clicking a keyword chip appends it to the story textarea', async () => {
     const storyTextarea = screen.getByPlaceholderText(/briefly describe/i);
     expect(storyTextarea.value).toBe('stakeholder management');
 });
+
+test('shows keyword coverage after bullets are generated', async () => {
+    global.fetch
+        .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ status: 'success', problems: mockProblems }),
+        })
+        .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({
+                status: 'success',
+                bullets: [
+                    { problem_title: 'Stakeholder Communication', bullet: 'Led stakeholder management across 3 regions' },
+                ],
+            }),
+        });
+
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+
+    // Fill out problem 1 as "No"
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[0], { target: { value: 'no' } });
+    fireEvent.change(screen.getByPlaceholderText(/briefly describe/i), { target: { value: 'I managed stakeholders' } });
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. reduced churn/i), { target: { value: '30%' } });
+
+    // Problem 2 as "Yes + no rewrite"
+    fireEvent.change(selects[1], { target: { value: 'yes' } });
+    await waitFor(() => screen.getByText(/want ai to rewrite/i));
+    const rewriteSelects = screen.getAllByRole('combobox');
+    fireEvent.change(rewriteSelects[rewriteSelects.length - 1], { target: { value: 'no' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate bullets/i }));
+
+    await waitFor(() => screen.getByText(/keyword coverage/i));
+
+    // "stakeholder management" appears in the bullet so it should be covered
+    expect(screen.getByText(/✓ stakeholder management/i)).toBeInTheDocument();
+    // "agile" (predicted) does not appear → still missing
+    expect(screen.getByText(/✗ agile/i)).toBeInTheDocument();
+});

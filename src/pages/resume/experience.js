@@ -242,7 +242,6 @@ const Experience = () => {
                 : `${currentBullets}\n${bullet}`;
             updateExperience(exp.id, { ...exp, bullets: merged });
         });
-        setAiWriteModalOpen(false);
     };
 
     return (

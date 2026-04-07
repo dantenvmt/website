@@ -57,12 +57,12 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             ];
 
             const payload = problems
-                .filter((_, i) =>
-                    experienceConfirmed[i] === 'no' ||
-                    (experienceConfirmed[i] === 'yes' && wantsAiRewrite[i] === 'yes')
+                .map((p, idx) => ({ p, idx }))
+                .filter(({ idx }) =>
+                    experienceConfirmed[idx] === 'no' ||
+                    (experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes')
                 )
-                .map((p) => {
-                    const idx = problems.indexOf(p);
+                .map(({ p, idx }) => {
                     const isRewrite = experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
                     return {
                         title: p.title,
@@ -87,8 +87,8 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setBullets(data.bullets);
             setSelected(data.bullets.map(() => true));
             setAssignments(data.bullets.map(() => ''));
-            onGenerated();
             setStep(STEPS.RESULTS);
+            onGenerated();
         } catch (err) {
             setErrorMessage(err.message);
             setRetryStep('generate');
@@ -163,10 +163,17 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         });
     };
 
-    const keywordChips = useMemo(() => [
-        ...(aiAnalysis?.missingKeywords?.map(k => ({ text: k.keyword || k, type: 'missing' })) || []),
-        ...(aiAnalysis?.predictedKeywords?.map(k => ({ text: k.keyword || k, type: 'predicted' })) || []),
-    ], [aiAnalysis]);
+    const keywordChips = useMemo(() => {
+        const seen = new Set();
+        return [
+            ...(aiAnalysis?.missingKeywords?.map(k => ({ text: k.keyword || k, type: 'missing' })) || []),
+            ...(aiAnalysis?.predictedKeywords?.map(k => ({ text: k.keyword || k, type: 'predicted' })) || []),
+        ].filter(({ text }) => {
+            if (seen.has(text)) return false;
+            seen.add(text);
+            return true;
+        });
+    }, [aiAnalysis]);
 
     const toggleSelected = (index) => {
         setSelected(prev => {
@@ -356,13 +363,14 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                     {step === STEPS.RESULTS && (
                         <div>
                             {(() => {
-                                const allKeywords = [
+                                const allKeywords = [...new Set([
                                     ...(aiAnalysis?.missingKeywords?.map(k => k.keyword || k) || []),
                                     ...(aiAnalysis?.predictedKeywords?.map(k => k.keyword || k) || []),
-                                ];
-                                const allBulletText = bullets.map(b => b.bullet.toLowerCase()).join(' ');
-                                const covered = allKeywords.filter(kw => allBulletText.includes(kw.toLowerCase()));
-                                const stillMissing = allKeywords.filter(kw => !allBulletText.includes(kw.toLowerCase()));
+                                ])];
+                                const allBulletText = bullets.map(b => b.bullet).join(' ');
+                                const makeWordBoundaryRegex = (kw) => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                                const covered = allKeywords.filter(kw => makeWordBoundaryRegex(kw).test(allBulletText));
+                                const stillMissing = allKeywords.filter(kw => !makeWordBoundaryRegex(kw).test(allBulletText));
 
                                 return allKeywords.length > 0 ? (
                                     <div className="mb-4 bg-[#0f172a] border border-gray-700 rounded-lg p-4">

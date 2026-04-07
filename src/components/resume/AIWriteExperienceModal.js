@@ -50,15 +50,29 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         setStep(STEPS.GENERATING);
         setErrorMessage('');
         try {
+            const allExistingBullets = experiences.map(e => e.bullets).filter(Boolean).join('\n');
+            const suggestedKeywords = [
+                ...(aiAnalysis?.missingKeywords?.map(k => k.keyword || k) || []),
+                ...(aiAnalysis?.predictedKeywords?.map(k => k.keyword || k) || []),
+            ];
+
             const payload = problems
-                .filter((_, i) => experienceConfirmed[i] === 'no' || (experienceConfirmed[i] === 'yes' && wantsAiRewrite[i] === 'yes'))
+                .filter((_, i) =>
+                    experienceConfirmed[i] === 'no' ||
+                    (experienceConfirmed[i] === 'yes' && wantsAiRewrite[i] === 'yes')
+                )
                 .map((p) => {
-                    const originalIndex = problems.indexOf(p);
+                    const idx = problems.indexOf(p);
+                    const isRewrite = experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
                     return {
                         title: p.title,
                         description: p.description,
-                        story: answers[originalIndex].story,
-                        metrics: answers[originalIndex].metrics,
+                        story: answers[idx].story,
+                        metrics: answers[idx].metrics,
+                        ...(isRewrite && {
+                            existing_bullets: allExistingBullets,
+                            suggested_keywords: suggestedKeywords,
+                        }),
                     };
                 });
             const res = await fetch('https://renaisons.com/api/write_experience_bullets.php', {
@@ -80,7 +94,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setRetryStep('generate');
             setStep(STEPS.ERROR);
         }
-    }, [problems, answers, experienceConfirmed, wantsAiRewrite]);
+    }, [problems, answers, experienceConfirmed, wantsAiRewrite, experiences, aiAnalysis]);
 
     useEffect(() => {
         analyzeProblems();

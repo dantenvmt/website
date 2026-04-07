@@ -78,7 +78,7 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite, noJd
 };
 
 const Experience = () => {
-    const { experiences, setExperiences, addExperience, jobDescription } = useResume();
+    const { experiences, setExperiences, addExperience, jobDescription, aiAnalysis } = useResume();
     const { resumeId } = useParams();
     const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
@@ -259,6 +259,7 @@ const Experience = () => {
                 <AIWriteExperienceModal
                     jobDescription={jobDescription}
                     experiences={experiences}
+                    aiAnalysis={aiAnalysis}
                     onInsert={handleAiInsert}
                     onGenerated={handleAiGenerated}
                     onClose={() => setAiWriteModalOpen(false)}

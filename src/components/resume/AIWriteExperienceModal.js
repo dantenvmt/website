@@ -9,11 +9,12 @@ const STEPS = {
     ERROR: 'error',
 };
 
-const AIWriteExperienceModal = ({ jobDescription, experiences, onInsert, onGenerated, onClose }) => {
+const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onInsert, onGenerated, onClose }) => {
     const [step, setStep] = useState(STEPS.ANALYZING);
     const [problems, setProblems] = useState([]);
     const [answers, setAnswers] = useState([]);
-    const [skipped, setSkipped] = useState([]);
+    const [experienceConfirmed, setExperienceConfirmed] = useState([]); // null | 'yes' | 'no' per problem
+    const [wantsAiRewrite, setWantsAiRewrite] = useState([]);           // null | 'yes' | 'no' per problem
     const [bullets, setBullets] = useState([]);
     const [selected, setSelected] = useState([]);
     const [assignments, setAssignments] = useState([]);
@@ -35,7 +36,8 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, onInsert, onGener
             if (data.status !== 'success') throw new Error(data.message || 'Failed to analyze job description.');
             setProblems(data.problems);
             setAnswers(data.problems.map(() => ({ story: '', metrics: '' })));
-            setSkipped(data.problems.map(() => false));
+            setExperienceConfirmed(data.problems.map(() => null));
+            setWantsAiRewrite(data.problems.map(() => null));
             setStep(STEPS.ANSWER);
         } catch (err) {
             setErrorMessage(err.message);
@@ -96,14 +98,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, onInsert, onGener
 
     const canInsert = selected.some(Boolean) &&
         selected.every((sel, i) => !sel || assignments[i] !== '');
-
-    const toggleSkipped = (index) => {
-        setSkipped(prev => {
-            const updated = [...prev];
-            updated[index] = !updated[index];
-            return updated;
-        });
-    };
 
     const updateAnswer = (index, field, value) => {
         setAnswers(prev => {

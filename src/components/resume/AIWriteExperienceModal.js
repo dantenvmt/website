@@ -118,6 +118,28 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         });
     };
 
+    const updateConfirmed = (index, value) => {
+        setExperienceConfirmed(prev => {
+            const updated = [...prev];
+            updated[index] = value || null;
+            return updated;
+        });
+        // Reset rewrite choice when confirmation changes
+        setWantsAiRewrite(prev => {
+            const updated = [...prev];
+            updated[index] = null;
+            return updated;
+        });
+    };
+
+    const updateWantsRewrite = (index, value) => {
+        setWantsAiRewrite(prev => {
+            const updated = [...prev];
+            updated[index] = value || null;
+            return updated;
+        });
+    };
+
     const toggleSelected = (index) => {
         setSelected(prev => {
             const updated = [...prev];
@@ -178,40 +200,88 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                         <div>
                             <p className="text-sm text-gray-400 mb-6">Here's what this role actually needs to solve:</p>
                             <div className="space-y-6">
-                                {problems.map((problem, i) => (
-                                    <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
-                                        <div className="flex justify-between items-start">
+                                {problems.map((problem, i) => {
+                                    const confirmed = experienceConfirmed[i];
+                                    const rewrite = wantsAiRewrite[i];
+                                    const showWriteFields = confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes');
+
+                                    return (
+                                        <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
                                             <div>
                                                 <p className="text-sm font-bold text-blue-400">{i + 1}. {problem.title}</p>
                                                 <p className="text-xs text-gray-400 mt-1">{problem.description}</p>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                Tell me about a time you solved this
-                                            </label>
-                                            <textarea
-                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                                                rows={3}
-                                                value={answers[i].story}
-                                                onChange={(e) => updateAnswer(i, 'story', e.target.value)}
-                                                placeholder="Briefly describe the situation and what you did..."
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                What were your specific numbers/metrics?
-                                            </label>
-                                            <input
-                                                type="text"
+
+                                            {/* Confirmation dropdown */}
+                                            <select
+                                                value={confirmed || ''}
+                                                onChange={(e) => updateConfirmed(i, e.target.value)}
                                                 className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                value={answers[i].metrics}
-                                                onChange={(e) => updateAnswer(i, 'metrics', e.target.value)}
-                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
-                                            />
+                                            >
+                                                <option value="">Do you have experience solving this?</option>
+                                                <option value="yes">Yes</option>
+                                                <option value="no">No</option>
+                                            </select>
+
+                                            {/* Yes path: show existing bullets + rewrite question */}
+                                            {confirmed === 'yes' && (
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                            Your existing bullets (for reference)
+                                                        </label>
+                                                        <div className="w-full bg-[#0a0f1a] border border-gray-800 rounded-md p-2 text-xs text-gray-500 whitespace-pre-wrap min-h-[60px] opacity-70">
+                                                            {experiences.map(e => e.bullets).filter(Boolean).join('\n') || 'No bullets written yet.'}
+                                                        </div>
+                                                    </div>
+                                                    <select
+                                                        value={rewrite || ''}
+                                                        onChange={(e) => updateWantsRewrite(i, e.target.value)}
+                                                        className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                    >
+                                                        <option value="">Want AI to rewrite your bullets with relevant keywords?</option>
+                                                        <option value="yes">Yes, rewrite with keywords</option>
+                                                        <option value="no">No, I'll keep my bullets as-is</option>
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            {/* Story + metrics fields (shown for No and Yes+Rewrite) */}
+                                            {showWriteFields && (
+                                                <>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                            {confirmed === 'yes'
+                                                                ? 'Add any extra context for the AI (optional)'
+                                                                : 'Tell me about a time you solved this'}
+                                                        </label>
+                                                        <textarea
+                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                                            rows={3}
+                                                            value={answers[i].story}
+                                                            onChange={(e) => updateAnswer(i, 'story', e.target.value)}
+                                                            placeholder="Briefly describe the situation and what you did..."
+                                                        />
+                                                    </div>
+                                                    {confirmed === 'no' && (
+                                                        <div>
+                                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                                What were your specific numbers/metrics?
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                                value={answers[i].metrics}
+                                                                onChange={(e) => updateAnswer(i, 'metrics', e.target.value)}
+                                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                             <div className="flex justify-end mt-6">
                                 <button

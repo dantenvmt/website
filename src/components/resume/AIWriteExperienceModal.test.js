@@ -42,3 +42,30 @@ test('renders analyzing spinner on mount', () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     expect(screen.getByText(/identifying key business problems/i)).toBeInTheDocument();
 });
+
+test('Generate button is disabled until all problems are resolved', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+
+    // Button should be disabled with nothing filled
+    expect(screen.getByRole('button', { name: /generate bullets/i })).toBeDisabled();
+});
+
+test('Generate button enables when all problems resolved with at least one to generate', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+
+    const selects = screen.getAllByRole('combobox');
+
+    // Problem 1: No (will generate) — fill story + metrics
+    fireEvent.change(selects[0], { target: { value: 'no' } });
+    fireEvent.change(screen.getByPlaceholderText(/briefly describe/i), { target: { value: 'I handled stakeholders daily' } });
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. reduced churn/i), { target: { value: '30% improvement' } });
+
+    // Problem 2: Yes + no rewrite (auto-satisfied)
+    fireEvent.change(selects[1], { target: { value: 'yes' } });
+    const rewriteSelects = screen.getAllByRole('combobox');
+    fireEvent.change(rewriteSelects[rewriteSelects.length - 1], { target: { value: 'no' } });
+
+    expect(screen.getByRole('button', { name: /generate bullets/i })).not.toBeDisabled();
+});

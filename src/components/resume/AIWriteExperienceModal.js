@@ -51,7 +51,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         setErrorMessage('');
         try {
             const payload = problems
-                .filter((_, i) => !skipped[i])
+                .filter((_, i) => experienceConfirmed[i] === 'no' || (experienceConfirmed[i] === 'yes' && wantsAiRewrite[i] === 'yes'))
                 .map((p) => {
                     const originalIndex = problems.indexOf(p);
                     return {
@@ -80,7 +80,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setRetryStep('generate');
             setStep(STEPS.ERROR);
         }
-    }, [problems, answers]);
+    }, [problems, answers, experienceConfirmed, wantsAiRewrite]);
 
     useEffect(() => {
         analyzeProblems();
@@ -92,9 +92,20 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const allAnswersFilled = answers.length > 0
-        && skipped.some(s => !s)
-        && answers.every((a, i) => skipped[i] || (a.story.trim() && a.metrics.trim()));
+    const allResolved = answers.length > 0 && experienceConfirmed.every((confirmed, i) => {
+        if (confirmed === null) return false;
+        if (confirmed === 'no') return answers[i].story.trim().length > 0 && answers[i].metrics.trim().length > 0;
+        if (confirmed === 'yes' && wantsAiRewrite[i] === null) return false;
+        if (confirmed === 'yes' && wantsAiRewrite[i] === 'yes') return answers[i].story.trim().length > 0;
+        if (confirmed === 'yes' && wantsAiRewrite[i] === 'no') return true;
+        return false;
+    });
+
+    const hasAtLeastOneToGenerate = experienceConfirmed.some(
+        (c, i) => c === 'no' || (c === 'yes' && wantsAiRewrite[i] === 'yes')
+    );
+
+    const allAnswersFilled = allResolved && hasAtLeastOneToGenerate;
 
     const canInsert = selected.some(Boolean) &&
         selected.every((sel, i) => !sel || assignments[i] !== '');
@@ -168,48 +179,37 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                             <p className="text-sm text-gray-400 mb-6">Here's what this role actually needs to solve:</p>
                             <div className="space-y-6">
                                 {problems.map((problem, i) => (
-                                    <div key={problem.id} className={`bg-[#0f172a] border rounded-lg p-4 space-y-3 ${skipped[i] ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}>
+                                    <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <p className="text-sm font-bold text-blue-400">{i + 1}. {problem.title}</p>
                                                 <p className="text-xs text-gray-400 mt-1">{problem.description}</p>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => toggleSkipped(i)}
-                                                className={`text-xs font-semibold ml-4 flex-shrink-0 px-2 py-1 rounded ${skipped[i] ? 'text-blue-400 hover:text-blue-300' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >
-                                                {skipped[i] ? 'Undo skip' : "I don't have this"}
-                                            </button>
                                         </div>
-                                        {!skipped[i] && (
-                                            <>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                        Tell me about a time you solved this
-                                                    </label>
-                                                    <textarea
-                                                        className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                                                        rows={3}
-                                                        value={answers[i].story}
-                                                        onChange={(e) => updateAnswer(i, 'story', e.target.value)}
-                                                        placeholder="Briefly describe the situation and what you did..."
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                        What were your specific numbers/metrics?
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                        value={answers[i].metrics}
-                                                        onChange={(e) => updateAnswer(i, 'metrics', e.target.value)}
-                                                        placeholder="e.g. reduced churn by 30%, saved $200K/year"
-                                                    />
-                                                </div>
-                                            </>
-                                        )}
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                Tell me about a time you solved this
+                                            </label>
+                                            <textarea
+                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                                rows={3}
+                                                value={answers[i].story}
+                                                onChange={(e) => updateAnswer(i, 'story', e.target.value)}
+                                                placeholder="Briefly describe the situation and what you did..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                What were your specific numbers/metrics?
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                value={answers[i].metrics}
+                                                onChange={(e) => updateAnswer(i, 'metrics', e.target.value)}
+                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
+                                            />
+                                        </div>
                                     </div>
                                 ))}
                             </div>

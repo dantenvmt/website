@@ -59,7 +59,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             const payload = problems
                 .map((p, idx) => ({ p, idx }))
                 .filter(({ idx }) =>
-                    experienceConfirmed[idx] === 'no' ||
                     (experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes')
                 )
                 .map(({ p, idx }) => {
@@ -108,7 +107,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
 
     const allResolved = answers.length > 0 && experienceConfirmed.every((confirmed, i) => {
         if (confirmed === null) return false;
-        if (confirmed === 'no') return answers[i].story.trim().length > 0 && answers[i].metrics.trim().length > 0;
+        if (confirmed === 'no') return true; // skip — no story required
         if (confirmed === 'yes' && wantsAiRewrite[i] === null) return false;
         if (confirmed === 'yes' && wantsAiRewrite[i] === 'yes') return answers[i].story.trim().length > 0;
         if (confirmed === 'yes' && wantsAiRewrite[i] === 'no') return true;
@@ -116,7 +115,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     });
 
     const hasAtLeastOneToGenerate = experienceConfirmed.some(
-        (c, i) => c === 'no' || (c === 'yes' && wantsAiRewrite[i] === 'yes')
+        (c, i) => (c === 'yes' && wantsAiRewrite[i] === 'yes')
     );
 
     const allAnswersFilled = allResolved && hasAtLeastOneToGenerate;
@@ -238,7 +237,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                 {problems.map((problem, i) => {
                                     const confirmed = experienceConfirmed[i];
                                     const rewrite = wantsAiRewrite[i];
-                                    const showWriteFields = confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes');
+                                    const showWriteFields = confirmed === 'yes' && rewrite === 'yes';
 
                                     return (
                                         <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
@@ -257,6 +256,11 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                 <option value="yes">Yes</option>
                                                 <option value="no">No</option>
                                             </select>
+
+                                            {/* No path: skip indicator */}
+                                            {confirmed === 'no' && (
+                                                <p className="text-xs text-gray-500 italic">This problem will be skipped — no bullet generated.</p>
+                                            )}
 
                                             {/* Yes path: show existing bullets + rewrite question */}
                                             {confirmed === 'yes' && (

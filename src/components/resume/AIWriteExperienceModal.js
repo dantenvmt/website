@@ -15,6 +15,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     const [answers, setAnswers] = useState([]);
     const [experienceConfirmed, setExperienceConfirmed] = useState([]); // null | 'yes' | 'no' per problem
     const [wantsAiRewrite, setWantsAiRewrite] = useState([]);           // null | 'yes' | 'no' per problem
+    const [skipOverrides, setSkipOverrides] = useState([]);             // bool per problem — user overrides AI skip
     const [bullets, setBullets] = useState([]);
     const [selected, setSelected] = useState([]);
     const [assignments, setAssignments] = useState([]);
@@ -42,6 +43,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setAnswers(data.problems.map(() => ({ experiences: [{ story: '', metrics: '' }] })));
             setExperienceConfirmed(data.problems.map(() => null));
             setWantsAiRewrite(data.problems.map(() => null));
+            setSkipOverrides(data.problems.map(() => false));
             setStep(STEPS.ANSWER);
         } catch (err) {
             setErrorMessage(err.message);
@@ -63,13 +65,13 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             const payload = problems
                 .map((p, idx) => ({ p, idx }))
                 .filter(({ p, idx }) => {
-                    if (!p.ai_has_experience) return false;
+                    if (!p.ai_has_experience) return skipOverrides[idx];
                     const confirmed = experienceConfirmed[idx];
                     const rewrite = wantsAiRewrite[idx];
                     return confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes');
                 })
                 .map(({ p, idx }) => {
-                    const isRewrite = experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
+                    const isRewrite = p.ai_has_experience && experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
                     const combinedStory = answers[idx].experiences.map(e => e.story).filter(Boolean).join('\n\n');
                     const combinedMetrics = answers[idx].experiences.map(e => e.metrics).filter(Boolean).join(', ');
                     return {
@@ -115,7 +117,10 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     }, [onClose]);
 
     const allResolved = answers.length > 0 && problems.every((problem, i) => {
-        if (!problem.ai_has_experience) return true;
+        if (!problem.ai_has_experience) {
+            if (!skipOverrides[i]) return true; // auto-skip
+            return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        }
         const confirmed = experienceConfirmed[i];
         const rewrite = wantsAiRewrite[i];
         if (confirmed === null) return false;
@@ -127,7 +132,9 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     });
 
     const hasAtLeastOneToGenerate = problems.some((problem, i) => {
-        if (!problem.ai_has_experience) return false;
+        if (!problem.ai_has_experience) {
+            return skipOverrides[i] && (answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false);
+        }
         const confirmed = experienceConfirmed[i];
         const rewrite = wantsAiRewrite[i];
         if (confirmed === 'no') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
@@ -179,6 +186,14 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         setWantsAiRewrite(prev => {
             const updated = [...prev];
             updated[index] = value || null;
+            return updated;
+        });
+    };
+
+    const toggleSkipOverride = (index) => {
+        setSkipOverrides(prev => {
+            const updated = [...prev];
+            updated[index] = !updated[index];
             return updated;
         });
     };
@@ -283,8 +298,62 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                 <p className="text-xs text-gray-400 mt-1">{problem.description}</p>
                                             </div>
 
-                                            {!hasAiExp && (
-                                                <p className="text-xs text-gray-500 italic">No relevant experience detected — skipped.</p>
+                                            {!hasAiExp && !skipOverrides[i] && (
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-xs text-gray-500 italic">No relevant experience detected.</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleSkipOverride(i)}
+                                                        className="text-xs text-blue-400 hover:text-blue-300 font-semibold ml-4 flex-shrink-0"
+                                                    >
+                                                        Write a bullet for this anyway →
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {!hasAiExp && skipOverrides[i] && (
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Writing from scratch</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSkipOverride(i)}
+                                                            className="text-xs text-gray-500 hover:text-gray-400"
+                                                        >
+                                                            ✕ Cancel
+                                                        </button>
+                                                    </div>
+                                                    {answers[i]?.experiences.map((exp, expIdx) => (
+                                                        <div key={expIdx} className="space-y-2">
+                                                            {expIdx > 0 && (
+                                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                                                                    Experience {expIdx + 1}
+                                                                </p>
+                                                            )}
+                                                            <textarea
+                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                                                rows={3}
+                                                                value={exp.story}
+                                                                onChange={(e) => updateAnswer(i, expIdx, 'story', e.target.value)}
+                                                                placeholder="Briefly describe the situation and what you did..."
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                                value={exp.metrics}
+                                                                onChange={(e) => updateAnswer(i, expIdx, 'metrics', e.target.value)}
+                                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => addExperienceEntry(i)}
+                                                        className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                                                    >
+                                                        + Add another experience
+                                                    </button>
+                                                </div>
                                             )}
 
                                             {hasAiExp && (

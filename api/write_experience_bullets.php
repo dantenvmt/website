@@ -11,9 +11,9 @@ if (!$apiKey) {
 $input = json_decode(file_get_contents('php://input'), true);
 $problems = isset($input['problems']) ? $input['problems'] : [];
 
-if (empty($problems) || count($problems) < 1 || count($problems) > 3) {
+if (empty($problems) || count($problems) < 1 || count($problems) > 9) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Between 1 and 3 problems are required']);
+    echo json_encode(['status' => 'error', 'message' => 'Between 1 and 9 experience entries are required']);
     exit;
 }
 
@@ -63,8 +63,8 @@ $prompt = "You are an expert resume writer with two bullet-writing modes:\n\n"
     . "  - Names the specific system, product, or initiative — never vague 'projects' or 'solutions'\n"
     . "  - Shows business impact, not just technical activity — what changed because of your work?\n"
     . "  - 20-40 words, dense, zero filler\n"
-    . "  - You MUST include ALL suggested keywords in the bullet — they are required for ATS matching\n"
-    . "  - Work the keywords in naturally so the bullet still reads as strong, human writing\n"
+    . "  - You MUST include ALL suggested keywords in the bullet — they are required for ATS matching\n"                                                                 
+    . "  - Work the keywords in naturally so the bullet still reads as strong, human writing\n" 
     . "  - NEVER invent metrics, team sizes, tools, or outcomes not present in existing bullets or candidate story\n"
     . "  - If existing bullets are thin, write a tighter, stronger version of what is already claimed — do not fabricate\n\n"
     . "Write exactly {$bulletCount} bullet(s) — one per problem. Apply the MODE labeled on each problem.\n\n"
@@ -78,7 +78,7 @@ $requestBody = json_encode([
     'model' => 'llama-3.3-70b-versatile',
     'messages' => [['role' => 'user', 'content' => $prompt]],
     'temperature' => 0.4,
-    'max_tokens' => 900,
+    'max_tokens' => 1500,
 ]);
 
 $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');

@@ -16,6 +16,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     const [experienceConfirmed, setExperienceConfirmed] = useState([]); // null | 'yes' | 'no' per problem
     const [wantsAiRewrite, setWantsAiRewrite] = useState([]);           // null | 'yes' | 'no' per problem
     const [skipOverrides, setSkipOverrides] = useState([]);             // bool per problem — user overrides AI skip
+    const [selectedKeywords, setSelectedKeywords] = useState(new Set()); // keywords user toggled on
     const [bullets, setBullets] = useState([]);
     const [selected, setSelected] = useState([]);
     const [assignments, setAssignments] = useState([]);
@@ -44,6 +45,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setExperienceConfirmed(data.problems.map(() => null));
             setWantsAiRewrite(data.problems.map(() => null));
             setSkipOverrides(data.problems.map(() => false));
+            setSelectedKeywords(new Set());
             setStep(STEPS.ANSWER);
         } catch (err) {
             setErrorMessage(err.message);
@@ -57,35 +59,35 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         setErrorMessage('');
         try {
             const allExistingBullets = experiences.map(e => e.bullets).filter(Boolean).join('\n');
-            const suggestedKeywords = [
-                ...(aiAnalysis?.missingKeywords?.map(k => k.keyword || k) || []),
-                ...(aiAnalysis?.predictedKeywords?.map(k => k.keyword || k) || []),
-            ];
+            const kwList = [...selectedKeywords];
 
-            const payload = problems
-                .map((p, idx) => ({ p, idx }))
-                .filter(({ p, idx }) => {
-                    if (!p.ai_has_experience) return skipOverrides[idx];
-                    const confirmed = experienceConfirmed[idx];
-                    const rewrite = wantsAiRewrite[idx];
-                    return confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes');
-                })
-                .map(({ p, idx }) => {
-                    const isRewrite = p.ai_has_experience && experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
-                    const combinedStory = answers[idx].experiences.map(e => e.story).filter(Boolean).join('\n\n');
-                    const combinedMetrics = answers[idx].experiences.map(e => e.metrics).filter(Boolean).join(', ');
-                    return {
+            // Build one payload entry per non-empty experience entry per qualifying problem
+            const payload = [];
+            problems.forEach((p, idx) => {
+                const hasAiExp = p.ai_has_experience;
+                if (!hasAiExp && !skipOverrides[idx]) return;
+
+                const confirmed = experienceConfirmed[idx];
+                const rewrite = wantsAiRewrite[idx];
+                if (hasAiExp && !(confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes'))) return;
+
+                const isRewrite = hasAiExp && confirmed === 'yes' && rewrite === 'yes';
+                // Always include the first entry (no story required); additional entries need a story
+            const nonEmptyExps = answers[idx].experiences.filter((e, eIdx) => eIdx === 0 || e.story.trim().length > 0);
+
+                nonEmptyExps.forEach(exp => {
+                    payload.push({
                         title: p.title,
                         description: p.description,
-                        story: combinedStory,
-                        ...(combinedMetrics && { metrics: combinedMetrics }),
+                        story: exp.story,
+                        ...(exp.metrics && { metrics: exp.metrics }),
                         mode: isRewrite ? 'rewrite' : 'write',
-                        ...(isRewrite && {
-                            existing_bullets: allExistingBullets,
-                            suggested_keywords: suggestedKeywords,
-                        }),
-                    };
+                        ...(kwList.length > 0 && { suggested_keywords: kwList }),
+                        ...(isRewrite && { existing_bullets: allExistingBullets }),
+                    });
                 });
+            });
+
             const res = await fetch('https://renaisons.com/api/write_experience_bullets.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -104,7 +106,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setRetryStep('generate');
             setStep(STEPS.ERROR);
         }
-    }, [problems, answers, experienceConfirmed, wantsAiRewrite, experiences, aiAnalysis]);
+    }, [problems, answers, experienceConfirmed, wantsAiRewrite, skipOverrides, experiences, selectedKeywords]);
 
     useEffect(() => {
         analyzeProblems();
@@ -117,28 +119,21 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     }, [onClose]);
 
     const allResolved = answers.length > 0 && problems.every((problem, i) => {
-        if (!problem.ai_has_experience) {
-            if (!skipOverrides[i]) return true; // auto-skip
-            return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
-        }
+        if (!problem.ai_has_experience) return true; // skipped or override — first entry always usable
         const confirmed = experienceConfirmed[i];
         const rewrite = wantsAiRewrite[i];
         if (confirmed === null) return false;
-        if (confirmed === 'no') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        if (confirmed === 'no') return true; // first entry always included
         if (confirmed === 'yes' && rewrite === null) return false;
-        if (confirmed === 'yes' && rewrite === 'yes') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
-        if (confirmed === 'yes' && rewrite === 'no') return true;
-        return false;
+        return true; // rewrite yes or rewrite no — both resolved
     });
 
     const hasAtLeastOneToGenerate = problems.some((problem, i) => {
-        if (!problem.ai_has_experience) {
-            return skipOverrides[i] && (answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false);
-        }
+        if (!problem.ai_has_experience) return skipOverrides[i]; // first entry included once override active
         const confirmed = experienceConfirmed[i];
         const rewrite = wantsAiRewrite[i];
-        if (confirmed === 'no') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
-        if (confirmed === 'yes' && rewrite === 'yes') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        if (confirmed === 'no') return true;
+        if (confirmed === 'yes' && rewrite === 'yes') return true;
         return false;
     });
 
@@ -174,7 +169,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             updated[index] = value || null;
             return updated;
         });
-        // Reset rewrite choice when confirmation changes
         setWantsAiRewrite(prev => {
             const updated = [...prev];
             updated[index] = null;
@@ -198,15 +192,12 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         });
     };
 
-    const appendKeyword = (index, keyword) => {
-        setAnswers(prev => {
-            const updated = [...prev];
-            const exps = [...updated[index].experiences];
-            const lastIdx = exps.length - 1;
-            const current = exps[lastIdx].story;
-            exps[lastIdx] = { ...exps[lastIdx], story: current ? `${current} ${keyword}` : keyword };
-            updated[index] = { ...updated[index], experiences: exps };
-            return updated;
+    const toggleKeyword = (keyword) => {
+        setSelectedKeywords(prev => {
+            const next = new Set(prev);
+            if (next.has(keyword)) next.delete(keyword);
+            else next.add(keyword);
+            return next;
         });
     };
 
@@ -256,6 +247,50 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         onClose();
     };
 
+    // Reusable experience entry fields renderer
+    const renderExperienceFields = (problemIndex, showMetrics) => {
+        const exps = answers[problemIndex]?.experiences || [];
+        const multiEntry = exps.length > 1;
+        return (
+            <div className="space-y-4">
+                {exps.map((exp, expIdx) => (
+                    <div key={expIdx} className="space-y-2">
+                        {multiEntry && (
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                                Experience {expIdx + 1}
+                            </p>
+                        )}
+                        {expIdx > 0 && (
+                            <textarea
+                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                rows={3}
+                                value={exp.story}
+                                onChange={(e) => updateAnswer(problemIndex, expIdx, 'story', e.target.value)}
+                                placeholder="Briefly describe the situation and what you did..."
+                            />
+                        )}
+                        {showMetrics && (
+                            <input
+                                type="text"
+                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                value={exp.metrics}
+                                onChange={(e) => updateAnswer(problemIndex, expIdx, 'metrics', e.target.value)}
+                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
+                            />
+                        )}
+                    </div>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => addExperienceEntry(problemIndex)}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                >
+                    + Add another experience
+                </button>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-[#1e293b] border border-gray-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -281,6 +316,43 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                     {step === STEPS.ANSWER && (
                         <div>
                             <p className="text-sm text-gray-400 mb-6">Here's what this role actually needs to solve:</p>
+
+                            {/* Global keyword chip tray — shown once above all problems */}
+                            {keywordChips.length > 0 && (
+                                <div className="mb-6 bg-[#0f172a] border border-gray-700 rounded-lg p-4">
+                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-2">
+                                        Select keywords to force-include in your bullets:
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {keywordChips.map(({ text, type }) => {
+                                            const isActive = selectedKeywords.has(text);
+                                            return (
+                                                <button
+                                                    key={text}
+                                                    type="button"
+                                                    onClick={() => toggleKeyword(text)}
+                                                    className={`px-2 py-0.5 text-xs font-semibold rounded-full border cursor-pointer transition-all ${isActive
+                                                            ? type === 'missing'
+                                                                ? 'bg-red-600 text-white border-red-500'
+                                                                : 'bg-purple-600 text-white border-purple-500'
+                                                            : type === 'missing'
+                                                                ? 'bg-red-950/30 text-red-300 border-red-900/50 hover:border-red-500'
+                                                                : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:border-purple-500'
+                                                        }`}
+                                                >
+                                                    {isActive ? `✓ ${text}` : `+ ${text}`}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedKeywords.size > 0 && (
+                                        <p className="text-[10px] text-gray-500 mt-2">
+                                            {selectedKeywords.size} keyword{selectedKeywords.size > 1 ? 's' : ''} selected — AI will choose to include {selectedKeywords.size > 1 ? 'them' : 'it'} if it fits naturally in the bullet.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-6">
                                 {problems.map((problem, i) => {
                                     const confirmed = experienceConfirmed[i];
@@ -289,7 +361,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                     const showWriteBox = hasAiExp && (
                                         confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes')
                                     );
-                                    const showMetrics = confirmed === 'no';
 
                                     return (
                                         <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
@@ -312,7 +383,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                             )}
 
                                             {!hasAiExp && skipOverrides[i] && (
-                                                <div className="space-y-4">
+                                                <div className="space-y-3">
                                                     <div className="flex items-center justify-between">
                                                         <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Writing from scratch</p>
                                                         <button
@@ -323,36 +394,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                             ✕ Cancel
                                                         </button>
                                                     </div>
-                                                    {answers[i]?.experiences.map((exp, expIdx) => (
-                                                        <div key={expIdx} className="space-y-2">
-                                                            {expIdx > 0 && (
-                                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                                                                    Experience {expIdx + 1}
-                                                                </p>
-                                                            )}
-                                                            <textarea
-                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                                                                rows={3}
-                                                                value={exp.story}
-                                                                onChange={(e) => updateAnswer(i, expIdx, 'story', e.target.value)}
-                                                                placeholder="Briefly describe the situation and what you did..."
-                                                            />
-                                                            <input
-                                                                type="text"
-                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                                value={exp.metrics}
-                                                                onChange={(e) => updateAnswer(i, expIdx, 'metrics', e.target.value)}
-                                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => addExperienceEntry(i)}
-                                                        className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-                                                    >
-                                                        + Add another experience
-                                                    </button>
+                                                    {renderExperienceFields(i, true)}
                                                 </div>
                                             )}
 
@@ -384,67 +426,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                         <p className="text-xs text-gray-500 italic">Skipped — keeping your existing bullets.</p>
                                                     )}
 
-                                                    {showWriteBox && (
-                                                        <div className="space-y-4">
-                                                            {keywordChips.length > 0 && (
-                                                                <div>
-                                                                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
-                                                                        Try to mention these keywords:
-                                                                    </p>
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {keywordChips.map(({ text, type }) => (
-                                                                            <button
-                                                                                key={text}
-                                                                                type="button"
-                                                                                onClick={() => appendKeyword(i, text)}
-                                                                                className={`px-2 py-0.5 text-xs font-semibold rounded-full border cursor-pointer transition-all hover:brightness-110 ${
-                                                                                    type === 'missing'
-                                                                                        ? 'bg-red-950/30 text-red-300 border-red-900/50 hover:border-red-500'
-                                                                                        : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:border-purple-500'
-                                                                                }`}
-                                                                            >
-                                                                                + {text}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {answers[i]?.experiences.map((exp, expIdx) => (
-                                                                <div key={expIdx} className="space-y-2">
-                                                                    {expIdx > 0 && (
-                                                                        <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                                                                            Experience {expIdx + 1}
-                                                                        </p>
-                                                                    )}
-                                                                    <textarea
-                                                                        className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                                                                        rows={3}
-                                                                        value={exp.story}
-                                                                        onChange={(e) => updateAnswer(i, expIdx, 'story', e.target.value)}
-                                                                        placeholder="Briefly describe the situation and what you did..."
-                                                                    />
-                                                                    {showMetrics && (
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                                            value={exp.metrics}
-                                                                            onChange={(e) => updateAnswer(i, expIdx, 'metrics', e.target.value)}
-                                                                            placeholder="e.g. reduced churn by 30%, saved $200K/year"
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                            ))}
-
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => addExperienceEntry(i)}
-                                                                className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-                                                            >
-                                                                + Add another experience
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                    {showWriteBox && renderExperienceFields(i, true)}
                                                 </div>
                                             )}
                                         </div>

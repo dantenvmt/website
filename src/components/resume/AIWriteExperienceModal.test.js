@@ -67,12 +67,14 @@ test('problem with ai_has_experience true shows confirmation dropdown', async ()
     expect(dropdowns[0]).toHaveDisplayValue('Do you have experience solving this?');
 });
 
-test('confirming No shows write-from-scratch textarea', async () => {
+test('confirming No shows metrics field and add-another button (no story for default entry)', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
     const dropdowns = screen.getAllByRole('combobox');
     fireEvent.change(dropdowns[0], { target: { value: 'no' } });
-    expect(screen.getByPlaceholderText(/briefly describe the situation/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/reduced churn by 30%/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/briefly describe the situation/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add another experience/i })).toBeInTheDocument();
 });
 
 test('confirming Yes shows rewrite dropdown', async () => {
@@ -84,7 +86,7 @@ test('confirming Yes shows rewrite dropdown', async () => {
     expect(screen.getByText(/want ai to rewrite/i)).toBeInTheDocument();
 });
 
-test('rewrite Yes shows textarea with keyword chips', async () => {
+test('rewrite Yes shows metrics field and keyword chips (no story for default entry)', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
     const dropdowns = screen.getAllByRole('combobox');
@@ -93,8 +95,9 @@ test('rewrite Yes shows textarea with keyword chips', async () => {
     // Rewrite dropdown for problem 1 is at index 1 (problem 3 confirmation is at index 2)
     const allDropdowns = screen.getAllByRole('combobox');
     fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });
-    await waitFor(() => screen.getByPlaceholderText(/briefly describe the situation/i));
-    expect(screen.getByPlaceholderText(/briefly describe the situation/i)).toBeInTheDocument();
+    await waitFor(() => screen.getByPlaceholderText(/reduced churn by 30%/i));
+    expect(screen.getByPlaceholderText(/reduced churn by 30%/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/briefly describe the situation/i)).not.toBeInTheDocument();
     expect(screen.getByText(/\+ stakeholder management/i)).toBeInTheDocument();
 });
 
@@ -111,25 +114,28 @@ test('rewrite No shows skip label', async () => {
     expect(screen.getByText(/skipped — keeping your existing bullets/i)).toBeInTheDocument();
 });
 
-test('Add another experience button appends a second story field', async () => {
+test('Add another experience button appends a story field for the second entry only', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
     const dropdowns = screen.getAllByRole('combobox');
     fireEvent.change(dropdowns[0], { target: { value: 'no' } });
     const addBtn = screen.getByRole('button', { name: /add another experience/i });
     fireEvent.click(addBtn);
-    expect(screen.getAllByPlaceholderText(/briefly describe the situation/i)).toHaveLength(2);
+    // Only the second entry shows the story textarea; first entry never shows it
+    expect(screen.getAllByPlaceholderText(/briefly describe the situation/i)).toHaveLength(1);
 });
 
-test('clicking a keyword chip appends it to the last story textarea', async () => {
+test('clicking a keyword chip toggles it to selected state', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
-    const dropdowns = screen.getAllByRole('combobox');
-    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    // Chip starts unselected (+ prefix)
     const chip = screen.getAllByText(/\+ stakeholder management/i)[0];
     fireEvent.click(chip);
-    const storyTextarea = screen.getAllByPlaceholderText(/briefly describe the situation/i)[0];
-    expect(storyTextarea.value).toBe('stakeholder management');
+    // After click, chip should be selected (✓ prefix)
+    expect(screen.getByText(/✓ stakeholder management/i)).toBeInTheDocument();
+    // Click again to deselect
+    fireEvent.click(screen.getByText(/✓ stakeholder management/i));
+    expect(screen.getAllByText(/\+ stakeholder management/i)[0]).toBeInTheDocument();
 });
 
 test('Generate button disabled until all ai_has_experience=true problems are resolved', async () => {
@@ -143,11 +149,8 @@ test('Generate button enables when resolved problems include at least one to gen
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
 
     const dropdowns = screen.getAllByRole('combobox');
-    // Problem 1: confirm No -> fill story
+    // Problem 1: confirm No — first entry always included, no story required
     fireEvent.change(dropdowns[0], { target: { value: 'no' } });
-    fireEvent.change(screen.getByPlaceholderText(/briefly describe the situation/i), {
-        target: { value: 'I handled stakeholders daily' },
-    });
     // Problem 3: confirm Yes -> rewrite No (skip)
     const allDropdowns = screen.getAllByRole('combobox');
     fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });
@@ -176,10 +179,8 @@ test('shows keyword coverage after bullets are generated', async () => {
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
 
     const dropdowns = screen.getAllByRole('combobox');
+    // Problem 1: confirm No — first entry always included, no story required
     fireEvent.change(dropdowns[0], { target: { value: 'no' } });
-    fireEvent.change(screen.getByPlaceholderText(/briefly describe the situation/i), {
-        target: { value: 'I managed stakeholders across regions' },
-    });
 
     const allDropdowns = screen.getAllByRole('combobox');
     fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });

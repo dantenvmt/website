@@ -9,7 +9,7 @@ const STEPS = {
     ERROR: 'error',
 };
 
-const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onInsert, onGenerated, onClose }) => {
+const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onInsert, onClose }) => {
     const [step, setStep] = useState(STEPS.ANALYZING);
     const [problems, setProblems] = useState([]);
     const [answers, setAnswers] = useState([]);
@@ -25,17 +25,21 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         setStep(STEPS.ANALYZING);
         setErrorMessage('');
         try {
+            const existingBullets = experiences.map(e => e.bullets).filter(Boolean).join('\n');
             const res = await fetch('https://renaisons.com/api/analyze_problems.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ job_description: jobDescription }),
+                body: JSON.stringify({
+                    job_description: jobDescription,
+                    existing_bullets: existingBullets,
+                }),
                 credentials: 'include',
             });
             if (!res.ok) throw new Error('Server error. Please try again.');
             const data = await res.json();
             if (data.status !== 'success') throw new Error(data.message || 'Failed to analyze job description.');
             setProblems(data.problems);
-            setAnswers(data.problems.map(() => ({ story: '', metrics: '' })));
+            setAnswers(data.problems.map(() => ({ experiences: [{ story: '', metrics: '' }] })));
             setExperienceConfirmed(data.problems.map(() => null));
             setWantsAiRewrite(data.problems.map(() => null));
             setStep(STEPS.ANSWER);
@@ -44,7 +48,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setRetryStep('analyze');
             setStep(STEPS.ERROR);
         }
-    }, [jobDescription]);
+    }, [jobDescription, experiences]);
 
     const generateBullets = useCallback(async () => {
         setStep(STEPS.GENERATING);
@@ -58,16 +62,22 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
 
             const payload = problems
                 .map((p, idx) => ({ p, idx }))
-                .filter(({ idx }) =>
-                    (experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes')
-                )
+                .filter(({ p, idx }) => {
+                    if (!p.ai_has_experience) return false;
+                    const confirmed = experienceConfirmed[idx];
+                    const rewrite = wantsAiRewrite[idx];
+                    return confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes');
+                })
                 .map(({ p, idx }) => {
                     const isRewrite = experienceConfirmed[idx] === 'yes' && wantsAiRewrite[idx] === 'yes';
+                    const combinedStory = answers[idx].experiences.map(e => e.story).filter(Boolean).join('\n\n');
+                    const combinedMetrics = answers[idx].experiences.map(e => e.metrics).filter(Boolean).join(', ');
                     return {
                         title: p.title,
                         description: p.description,
-                        story: answers[idx].story,
-                        metrics: answers[idx].metrics,
+                        story: combinedStory,
+                        ...(combinedMetrics && { metrics: combinedMetrics }),
+                        mode: isRewrite ? 'rewrite' : 'write',
                         ...(isRewrite && {
                             existing_bullets: allExistingBullets,
                             suggested_keywords: suggestedKeywords,
@@ -87,7 +97,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setSelected(data.bullets.map(() => true));
             setAssignments(data.bullets.map(() => ''));
             setStep(STEPS.RESULTS);
-            onGenerated();
         } catch (err) {
             setErrorMessage(err.message);
             setRetryStep('generate');
@@ -105,28 +114,49 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const allResolved = answers.length > 0 && experienceConfirmed.every((confirmed, i) => {
+    const allResolved = answers.length > 0 && problems.every((problem, i) => {
+        if (!problem.ai_has_experience) return true;
+        const confirmed = experienceConfirmed[i];
+        const rewrite = wantsAiRewrite[i];
         if (confirmed === null) return false;
-        if (confirmed === 'no') return true; // skip — no story required
-        if (confirmed === 'yes' && wantsAiRewrite[i] === null) return false;
-        if (confirmed === 'yes' && wantsAiRewrite[i] === 'yes') return answers[i].story.trim().length > 0;
-        if (confirmed === 'yes' && wantsAiRewrite[i] === 'no') return true;
+        if (confirmed === 'no') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        if (confirmed === 'yes' && rewrite === null) return false;
+        if (confirmed === 'yes' && rewrite === 'yes') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        if (confirmed === 'yes' && rewrite === 'no') return true;
         return false;
     });
 
-    const hasAtLeastOneToGenerate = experienceConfirmed.some(
-        (c, i) => (c === 'yes' && wantsAiRewrite[i] === 'yes')
-    );
+    const hasAtLeastOneToGenerate = problems.some((problem, i) => {
+        if (!problem.ai_has_experience) return false;
+        const confirmed = experienceConfirmed[i];
+        const rewrite = wantsAiRewrite[i];
+        if (confirmed === 'no') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        if (confirmed === 'yes' && rewrite === 'yes') return answers[i]?.experiences.some(e => e.story.trim().length > 0) ?? false;
+        return false;
+    });
 
     const allAnswersFilled = allResolved && hasAtLeastOneToGenerate;
 
     const canInsert = selected.some(Boolean) &&
         selected.every((sel, i) => !sel || assignments[i] !== '');
 
-    const updateAnswer = (index, field, value) => {
+    const updateAnswer = (problemIndex, expIndex, field, value) => {
         setAnswers(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            const exps = [...updated[problemIndex].experiences];
+            exps[expIndex] = { ...exps[expIndex], [field]: value };
+            updated[problemIndex] = { ...updated[problemIndex], experiences: exps };
+            return updated;
+        });
+    };
+
+    const addExperienceEntry = (problemIndex) => {
+        setAnswers(prev => {
+            const updated = [...prev];
+            updated[problemIndex] = {
+                ...updated[problemIndex],
+                experiences: [...updated[problemIndex].experiences, { story: '', metrics: '' }],
+            };
             return updated;
         });
     };
@@ -156,8 +186,11 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     const appendKeyword = (index, keyword) => {
         setAnswers(prev => {
             const updated = [...prev];
-            const current = updated[index].story;
-            updated[index] = { ...updated[index], story: current ? `${current} ${keyword}` : keyword };
+            const exps = [...updated[index].experiences];
+            const lastIdx = exps.length - 1;
+            const current = exps[lastIdx].story;
+            exps[lastIdx] = { ...exps[lastIdx], story: current ? `${current} ${keyword}` : keyword };
+            updated[index] = { ...updated[index], experiences: exps };
             return updated;
         });
     };
@@ -237,7 +270,11 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                 {problems.map((problem, i) => {
                                     const confirmed = experienceConfirmed[i];
                                     const rewrite = wantsAiRewrite[i];
-                                    const showWriteFields = confirmed === 'yes' && rewrite === 'yes';
+                                    const hasAiExp = problem.ai_has_experience;
+                                    const showWriteBox = hasAiExp && (
+                                        confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes')
+                                    );
+                                    const showMetrics = confirmed === 'no';
 
                                     return (
                                         <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
@@ -246,100 +283,100 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                 <p className="text-xs text-gray-400 mt-1">{problem.description}</p>
                                             </div>
 
-                                            {/* Confirmation dropdown */}
-                                            <select
-                                                value={confirmed || ''}
-                                                onChange={(e) => updateConfirmed(i, e.target.value)}
-                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                            >
-                                                <option value="">Do you have experience solving this?</option>
-                                                <option value="yes">Yes</option>
-                                                <option value="no">No</option>
-                                            </select>
-
-                                            {/* No path: skip indicator */}
-                                            {confirmed === 'no' && (
-                                                <p className="text-xs text-gray-500 italic">This problem will be skipped — no bullet generated.</p>
+                                            {!hasAiExp && (
+                                                <p className="text-xs text-gray-500 italic">No relevant experience detected — skipped.</p>
                                             )}
 
-                                            {/* Yes path: show existing bullets + rewrite question */}
-                                            {confirmed === 'yes' && (
+                                            {hasAiExp && (
                                                 <div className="space-y-3">
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                            Your existing bullets (for reference)
-                                                        </label>
-                                                        <div className="w-full bg-[#0a0f1a] border border-gray-800 rounded-md p-2 text-xs text-gray-500 whitespace-pre-wrap min-h-[60px] opacity-70">
-                                                            {experiences.map(e => e.bullets).filter(Boolean).join('\n') || 'No bullets written yet.'}
-                                                        </div>
-                                                    </div>
                                                     <select
-                                                        value={rewrite || ''}
-                                                        onChange={(e) => updateWantsRewrite(i, e.target.value)}
+                                                        value={confirmed || ''}
+                                                        onChange={(e) => updateConfirmed(i, e.target.value)}
                                                         className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
                                                     >
-                                                        <option value="">Want AI to rewrite your bullets with relevant keywords?</option>
-                                                        <option value="yes">Yes, rewrite with keywords</option>
-                                                        <option value="no">No, I'll keep my bullets as-is</option>
+                                                        <option value="">Do you have experience solving this?</option>
+                                                        <option value="yes">Yes</option>
+                                                        <option value="no">No</option>
                                                     </select>
-                                                </div>
-                                            )}
 
-                                            {/* Story + metrics fields (shown for No and Yes+Rewrite) */}
-                                            {showWriteFields && (
-                                                <>
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                            {confirmed === 'yes'
-                                                                ? 'Add any extra context for the AI (optional)'
-                                                                : 'Tell me about a time you solved this'}
-                                                        </label>
-                                                        {keywordChips.length > 0 && (
-                                                            <div className="mb-2">
-                                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
-                                                                    Try to mention these keywords:
-                                                                </p>
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                    {keywordChips.map(({ text, type }) => (
-                                                                        <button
-                                                                            key={text}
-                                                                            type="button"
-                                                                            onClick={() => appendKeyword(i, text)}
-                                                                            className={`px-2 py-0.5 text-xs font-semibold rounded-full border cursor-pointer transition-all hover:brightness-110 ${
-                                                                                type === 'missing'
-                                                                                    ? 'bg-red-950/30 text-red-300 border-red-900/50 hover:border-red-500'
-                                                                                    : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:border-purple-500'
-                                                                            }`}
-                                                                        >
-                                                                            + {text}
-                                                                        </button>
-                                                                    ))}
+                                                    {confirmed === 'yes' && (
+                                                        <select
+                                                            value={rewrite || ''}
+                                                            onChange={(e) => updateWantsRewrite(i, e.target.value)}
+                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        >
+                                                            <option value="">Want AI to rewrite your bullets with relevant keywords?</option>
+                                                            <option value="yes">Yes, rewrite with keywords</option>
+                                                            <option value="no">No, I'll keep my bullets as-is</option>
+                                                        </select>
+                                                    )}
+
+                                                    {confirmed === 'yes' && rewrite === 'no' && (
+                                                        <p className="text-xs text-gray-500 italic">Skipped — keeping your existing bullets.</p>
+                                                    )}
+
+                                                    {showWriteBox && (
+                                                        <div className="space-y-4">
+                                                            {keywordChips.length > 0 && (
+                                                                <div>
+                                                                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
+                                                                        Try to mention these keywords:
+                                                                    </p>
+                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                        {keywordChips.map(({ text, type }) => (
+                                                                            <button
+                                                                                key={text}
+                                                                                type="button"
+                                                                                onClick={() => appendKeyword(i, text)}
+                                                                                className={`px-2 py-0.5 text-xs font-semibold rounded-full border cursor-pointer transition-all hover:brightness-110 ${
+                                                                                    type === 'missing'
+                                                                                        ? 'bg-red-950/30 text-red-300 border-red-900/50 hover:border-red-500'
+                                                                                        : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:border-purple-500'
+                                                                                }`}
+                                                                            >
+                                                                                + {text}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                        <textarea
-                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                                                            rows={3}
-                                                            value={answers[i].story}
-                                                            onChange={(e) => updateAnswer(i, 'story', e.target.value)}
-                                                            placeholder="Briefly describe the situation and what you did..."
-                                                        />
-                                                    </div>
-                                                    {confirmed === 'no' && (
-                                                        <div>
-                                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                                                                What were your specific numbers/metrics?
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                                value={answers[i].metrics}
-                                                                onChange={(e) => updateAnswer(i, 'metrics', e.target.value)}
-                                                                placeholder="e.g. reduced churn by 30%, saved $200K/year"
-                                                            />
+                                                            )}
+
+                                                            {answers[i]?.experiences.map((exp, expIdx) => (
+                                                                <div key={expIdx} className="space-y-2">
+                                                                    {expIdx > 0 && (
+                                                                        <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                                                                            Experience {expIdx + 1}
+                                                                        </p>
+                                                                    )}
+                                                                    <textarea
+                                                                        className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                                                        rows={3}
+                                                                        value={exp.story}
+                                                                        onChange={(e) => updateAnswer(i, expIdx, 'story', e.target.value)}
+                                                                        placeholder="Briefly describe the situation and what you did..."
+                                                                    />
+                                                                    {showMetrics && (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                                            value={exp.metrics}
+                                                                            onChange={(e) => updateAnswer(i, expIdx, 'metrics', e.target.value)}
+                                                                            placeholder="e.g. reduced churn by 30%, saved $200K/year"
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            ))}
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => addExperienceEntry(i)}
+                                                                className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                                                            >
+                                                                + Add another experience
+                                                            </button>
                                                         </div>
                                                     )}
-                                                </>
+                                                </div>
                                             )}
                                         </div>
                                     );

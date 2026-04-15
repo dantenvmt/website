@@ -2,13 +2,15 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AIWriteExperienceModal from './AIWriteExperienceModal';
 
+// Problem 1: has relevant experience. Problem 2: no experience (skip). Problem 3: has relevant experience.
 const mockProblems = [
-    { id: 'p1', title: 'Stakeholder Communication', description: 'Managing cross-functional teams' },
-    { id: 'p2', title: 'Data Analysis', description: 'Turning data into decisions' },
+    { id: 1, title: 'Stakeholder Communication', description: 'Managing cross-functional teams', ai_has_experience: true },
+    { id: 2, title: 'Data Analysis', description: 'Turning data into decisions', ai_has_experience: false },
+    { id: 3, title: 'Budget Planning', description: 'Managing departmental budgets', ai_has_experience: true },
 ];
 
 const mockExperiences = [
-    { id: 'e1', role: 'Manager', company: 'Acme', bullets: '• Led a team of 5\n• Improved KPIs by 20%' },
+    { id: 'e1', role: 'Manager', company: 'Acme', bullets: 'Led a team of 5. Improved KPIs by 20%' },
 ];
 
 const mockAiAnalysis = {
@@ -16,12 +18,12 @@ const mockAiAnalysis = {
     predictedKeywords: [{ keyword: 'agile' }],
 };
 
+// onGenerated removed — no more usage limit
 const defaultProps = {
     jobDescription: 'We need someone to manage stakeholders.',
     experiences: mockExperiences,
     aiAnalysis: mockAiAnalysis,
     onInsert: jest.fn(),
-    onGenerated: jest.fn(),
     onClose: jest.fn(),
 };
 
@@ -43,47 +45,117 @@ test('renders analyzing spinner on mount', () => {
     expect(screen.getByText(/identifying key business problems/i)).toBeInTheDocument();
 });
 
-test('Generate button is disabled until all problems are resolved', async () => {
+test('analyze call includes existing_bullets in body', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.existing_bullets).toBe('Led a team of 5. Improved KPIs by 20%');
+});
 
-    // Button should be disabled with nothing filled
+test('problem with ai_has_experience false shows skip label', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    expect(screen.getByText(/no relevant experience detected/i)).toBeInTheDocument();
+});
+
+test('problem with ai_has_experience true shows confirmation dropdown', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    // Two problems have ai_has_experience=true, so two confirmation dropdowns
+    const dropdowns = screen.getAllByRole('combobox');
+    expect(dropdowns).toHaveLength(2);
+    expect(dropdowns[0]).toHaveDisplayValue('Do you have experience solving this?');
+});
+
+test('confirming No shows write-from-scratch textarea', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    expect(screen.getByPlaceholderText(/briefly describe the situation/i)).toBeInTheDocument();
+});
+
+test('confirming Yes shows rewrite dropdown', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'yes' } });
+    await waitFor(() => screen.getByText(/want ai to rewrite/i));
+    expect(screen.getByText(/want ai to rewrite/i)).toBeInTheDocument();
+});
+
+test('rewrite Yes shows textarea with keyword chips', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'yes' } });
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(3));
+    // Rewrite dropdown for problem 1 is at index 1 (problem 3 confirmation is at index 2)
+    const allDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });
+    await waitFor(() => screen.getByPlaceholderText(/briefly describe the situation/i));
+    expect(screen.getByPlaceholderText(/briefly describe the situation/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+ stakeholder management/i)).toBeInTheDocument();
+});
+
+test('rewrite No shows skip label', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'yes' } });
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(3));
+    // Rewrite dropdown for problem 1 is at index 1 (problem 3 confirmation is at index 2)
+    const allDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(allDropdowns[1], { target: { value: 'no' } });
+    await waitFor(() => screen.getByText(/skipped — keeping your existing bullets/i));
+    expect(screen.getByText(/skipped — keeping your existing bullets/i)).toBeInTheDocument();
+});
+
+test('Add another experience button appends a second story field', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    const addBtn = screen.getByRole('button', { name: /add another experience/i });
+    fireEvent.click(addBtn);
+    expect(screen.getAllByPlaceholderText(/briefly describe the situation/i)).toHaveLength(2);
+});
+
+test('clicking a keyword chip appends it to the last story textarea', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    const chip = screen.getAllByText(/\+ stakeholder management/i)[0];
+    fireEvent.click(chip);
+    const storyTextarea = screen.getAllByPlaceholderText(/briefly describe the situation/i)[0];
+    expect(storyTextarea.value).toBe('stakeholder management');
+});
+
+test('Generate button disabled until all ai_has_experience=true problems are resolved', async () => {
+    render(<AIWriteExperienceModal {...defaultProps} />);
+    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
     expect(screen.getByRole('button', { name: /generate bullets/i })).toBeDisabled();
 });
 
-test('Generate button enables when all problems resolved with at least one to generate', async () => {
+test('Generate button enables when resolved problems include at least one to generate', async () => {
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
 
-    const selects = screen.getAllByRole('combobox');
-
-    // Problem 1: No (will generate) — fill story + metrics
-    fireEvent.change(selects[0], { target: { value: 'no' } });
-    fireEvent.change(screen.getByPlaceholderText(/briefly describe/i), { target: { value: 'I handled stakeholders daily' } });
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. reduced churn/i), { target: { value: '30% improvement' } });
-
-    // Problem 2: Yes + no rewrite (auto-satisfied)
-    fireEvent.change(selects[1], { target: { value: 'yes' } });
-    const rewriteSelects = screen.getAllByRole('combobox');
-    fireEvent.change(rewriteSelects[rewriteSelects.length - 1], { target: { value: 'no' } });
+    const dropdowns = screen.getAllByRole('combobox');
+    // Problem 1: confirm No -> fill story
+    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    fireEvent.change(screen.getByPlaceholderText(/briefly describe the situation/i), {
+        target: { value: 'I handled stakeholders daily' },
+    });
+    // Problem 3: confirm Yes -> rewrite No (skip)
+    const allDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBeGreaterThan(2));
+    const updatedDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(updatedDropdowns[updatedDropdowns.length - 1], { target: { value: 'no' } });
 
     expect(screen.getByRole('button', { name: /generate bullets/i })).not.toBeDisabled();
-});
-
-test('clicking a keyword chip appends it to the story textarea', async () => {
-    render(<AIWriteExperienceModal {...defaultProps} />);
-    await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
-
-    // Select "No" for first problem to reveal story field and chips
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'no' } });
-
-    // Click the "stakeholder management" chip
-    const chip = screen.getAllByText(/\+ stakeholder management/i)[0];
-    fireEvent.click(chip);
-
-    const storyTextarea = screen.getByPlaceholderText(/briefly describe/i);
-    expect(storyTextarea.value).toBe('stakeholder management');
 });
 
 test('shows keyword coverage after bullets are generated', async () => {
@@ -96,33 +168,28 @@ test('shows keyword coverage after bullets are generated', async () => {
             ok: true,
             json: () => Promise.resolve({
                 status: 'success',
-                bullets: [
-                    { problem_title: 'Stakeholder Communication', bullet: 'Led stakeholder management across 3 regions' },
-                ],
+                bullets: [{ problem_title: 'Stakeholder Communication', bullet: 'Led stakeholder management across 3 regions' }],
             }),
         });
 
     render(<AIWriteExperienceModal {...defaultProps} />);
     await waitFor(() => screen.getByText(/here's what this role actually needs to solve/i));
 
-    // Fill out problem 1 as "No"
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'no' } });
-    fireEvent.change(screen.getByPlaceholderText(/briefly describe/i), { target: { value: 'I managed stakeholders' } });
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. reduced churn/i), { target: { value: '30%' } });
+    const dropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(dropdowns[0], { target: { value: 'no' } });
+    fireEvent.change(screen.getByPlaceholderText(/briefly describe the situation/i), {
+        target: { value: 'I managed stakeholders across regions' },
+    });
 
-    // Problem 2 as "Yes + no rewrite"
-    fireEvent.change(selects[1], { target: { value: 'yes' } });
-    await waitFor(() => screen.getByText(/want ai to rewrite/i));
-    const rewriteSelects = screen.getAllByRole('combobox');
-    fireEvent.change(rewriteSelects[rewriteSelects.length - 1], { target: { value: 'no' } });
+    const allDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(allDropdowns[1], { target: { value: 'yes' } });
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBeGreaterThan(2));
+    const updatedDropdowns = screen.getAllByRole('combobox');
+    fireEvent.change(updatedDropdowns[updatedDropdowns.length - 1], { target: { value: 'no' } });
 
     fireEvent.click(screen.getByRole('button', { name: /generate bullets/i }));
-
     await waitFor(() => screen.getByText(/keyword coverage/i));
 
-    // "stakeholder management" appears in the bullet so it should be covered
     expect(screen.getByText(/✓ stakeholder management/i)).toBeInTheDocument();
-    // "agile" (predicted) does not appear → still missing
     expect(screen.getByText(/✗ agile/i)).toBeInTheDocument();
 });

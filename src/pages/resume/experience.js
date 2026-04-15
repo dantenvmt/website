@@ -9,7 +9,7 @@ import { useResume } from '../../context/ResumeContext';
 import FeedbackModal from '../../components/common/FeedbackModal';
 import AIWriteExperienceModal from '../../components/resume/AIWriteExperienceModal';
 
-const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite, noJd, aiWriteUsed }) => {
+const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite, noJd }) => {
     const companyName = experience.company || 'THE COMPANY';
 
     return (
@@ -53,12 +53,10 @@ const ExperienceItem = ({ experience, index, onUpdate, onDelete, onAiWrite, noJd
                         <div className="flex flex-col items-end gap-1">
                             <button
                                 type="button"
-                                onClick={() => !aiWriteUsed && onAiWrite(experience.id)}
-                                disabled={aiWriteUsed}
-                                className={`text-xs font-bold py-1 px-3 rounded-md ${aiWriteUsed ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
-                                title={aiWriteUsed ? 'Already used for this job description' : ''}
+                                onClick={() => onAiWrite(experience.id)}
+                                className="text-xs font-bold py-1 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white"
                             >
-                                {aiWriteUsed ? 'AI Write Used' : 'AI Write'}
+                                AI Write
                             </button>
                             {noJd && (
                                 <span className="text-xs text-red-400">Add a job description on the Final Resume page first.</span>
@@ -83,7 +81,6 @@ const Experience = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, message: '', title: '', isError: false });
     const [aiWriteModalOpen, setAiWriteModalOpen] = useState(false);
-    const [aiWriteUsed, setAiWriteUsed] = useState(false);
     const [noJdWarningExpId, setNoJdWarningExpId] = useState(null);
 
     const updateExperience = useCallback((id, updatedData) => {
@@ -185,51 +182,13 @@ const Experience = () => {
         }
     };
 
-    useEffect(() => {
-        if (!resumeId || !jobDescription) { setAiWriteUsed(false); return; }
-        let hash = 0;
-        for (let i = 0; i < jobDescription.length; i++) {
-            hash = ((hash << 5) - hash) + jobDescription.charCodeAt(i);
-            hash |= 0;
-        }
-        setAiWriteUsed(!!localStorage.getItem(`aiwrite_${resumeId}_${hash}`));
-    }, [resumeId, jobDescription]);
-
-    const getAiWriteKey = () => {
-        if (!resumeId || !jobDescription) return null;
-        let hash = 0;
-        for (let i = 0; i < jobDescription.length; i++) {
-            hash = ((hash << 5) - hash) + jobDescription.charCodeAt(i);
-            hash |= 0;
-        }
-        return `aiwrite_${resumeId}_${hash}`;
-    };
-
     const handleAiWrite = (id) => {
         if (!jobDescription || !jobDescription.trim()) {
             setNoJdWarningExpId(id);
             return;
         }
-        const key = getAiWriteKey();
-        if (key && localStorage.getItem(key)) {
-            setModalInfo({
-                isOpen: true,
-                title: 'AI Write Already Used',
-                message: "You've already used AI Write for this job description.",
-                isError: true,
-            });
-            return;
-        }
         setNoJdWarningExpId(null);
         setAiWriteModalOpen(true);
-    };
-
-    const handleAiGenerated = () => {
-        const key = getAiWriteKey();
-        if (key) {
-            localStorage.setItem(key, '1');
-            setAiWriteUsed(true);
-        }
     };
 
     const handleAiInsert = (items) => {
@@ -260,7 +219,6 @@ const Experience = () => {
                     experiences={experiences}
                     aiAnalysis={aiAnalysis}
                     onInsert={handleAiInsert}
-                    onGenerated={handleAiGenerated}
                     onClose={() => setAiWriteModalOpen(false)}
                 />
             )}
@@ -273,7 +231,6 @@ const Experience = () => {
                     onDelete={deleteExperience}
                     onAiWrite={handleAiWrite}
                     noJd={noJdWarningExpId === exp.id}
-                    aiWriteUsed={aiWriteUsed}
                 />
             ))}
             <AddItemButton onClick={addExperience}>

@@ -11,6 +11,9 @@ if (!$apiKey) {
 $input = json_decode(file_get_contents('php://input'), true);
 $jobDescription = isset($input['job_description']) ? trim($input['job_description']) : '';
 $existingBullets = isset($input['existing_bullets']) ? trim($input['existing_bullets']) : '';
+if (strlen($existingBullets) > 6000) {
+    $existingBullets = substr($existingBullets, 0, 6000) . '... [truncated]';
+}
 
 if (empty($jobDescription)) {
     http_response_code(400);
@@ -18,7 +21,7 @@ if (empty($jobDescription)) {
     exit;
 }
 
-if (strlen($jobDescription) > 8000) {
+if (strlen($jobDescription) > 15000) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Job description is too long. Please shorten it and try again.']);
     exit;
@@ -40,7 +43,7 @@ $prompt = "Analyze this job description and identify the top 3 specific business
     . "Return only the JSON array, no other text.";
 
 $requestBody = json_encode([
-    'model' => 'llama-3.3-70b-versatile',
+    'model' => 'openai/gpt-oss-120b',
     'messages' => [['role' => 'user', 'content' => $prompt]],
     'temperature' => 0.3,
     'max_tokens' => 600,
@@ -54,7 +57,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json',
     'Authorization: Bearer ' . $apiKey,
 ]);
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
 $response = curl_exec($ch);
 

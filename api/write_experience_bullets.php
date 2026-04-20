@@ -31,54 +31,158 @@ foreach ($problems as $i => $p) {
     }
     $num = $i + 1;
     $mode = isset($p['mode']) && $p['mode'] === 'rewrite' ? 'REWRITE' : 'WRITE';
-    $problemsText .= "Problem {$num} [MODE: {$mode}]: " . $p['title'] . "\n";
-    $problemsText .= "Description: " . $p['description'] . "\n";
-    $problemsText .= "Candidate story / extra context: " . $p['story'] . "\n";
+
+    $problemsText .= "<problem id=\"{$num}\" mode=\"{$mode}\">\n";
+    $problemsText .= "  <title>" . $p['title'] . "</title>\n";
+    $problemsText .= "  <role_description>" . $p['description'] . "</role_description>\n";
+    $problemsText .= "  <candidate_story>" . $p['story'] . "</candidate_story>\n";
     if (!empty($p['metrics'])) {
-        $problemsText .= "Metrics: " . $p['metrics'] . "\n";
+        $problemsText .= "  <metrics>" . $p['metrics'] . "</metrics>\n";
     }
     if (!empty($p['existing_bullets'])) {
-        $problemsText .= "Candidate's existing bullets (rewrite these, keeping their authentic voice): " . $p['existing_bullets'] . "\n";
+        $problemsText .= "  <existing_bullets>" . $p['existing_bullets'] . "</existing_bullets>\n";
     }
     if (!empty($p['suggested_keywords']) && is_array($p['suggested_keywords'])) {
-        $problemsText .= "Keywords to naturally weave in where they genuinely fit: " . implode(', ', $p['suggested_keywords']) . "\n";
+        $problemsText .= "  <required_keywords>" . implode(', ', $p['suggested_keywords']) . "</required_keywords>\n";
     }
-    $problemsText .= "\n";
+    $problemsText .= "</problem>\n\n";
 }
 
 $bulletCount = count($problems);
-$prompt = "You are an expert resume writer with two bullet-writing modes:\n\n"
-    . "MODE: WRITE — Write a brand-new achievement bullet grounded strictly in the candidate's story.\n"
-    . "  - Starts with a strong past-tense action verb\n"
-    . "  - Names what you specifically built, designed, led, or did — drawn ONLY from the candidate's story\n"
-    . "  - Includes the quantified result using the candidate's exact numbers\n"
-    . "  - Flows naturally — no robotic phrasing like 'as measured by' or 'in order to'\n"
-    . "  - 20-35 words, no filler\n"
-    . "  - NEVER invent tools, technologies, numbers, or outcomes not stated by the candidate\n\n"
-    . "MODE: REWRITE — Rewrite the candidate's existing bullet(s) to FAANG / elite-company standard.\n"
-    . "  Google, Meta, Amazon, and Microsoft resume standards:\n"
-    . "  - Opens with a powerful past-tense action verb (Architected, Spearheaded, Engineered, Drove, Scaled, Optimized, Reduced, Launched)\n"
-    . "  - Leads with scope or scale when impressive (team size, user base, request volume, revenue impact, cost savings)\n"
-    . "  - Quantifies everything: latency, throughput, cost reduction, error rate, time saved, revenue generated\n"
-    . "  - Names the specific system, product, or initiative — never vague 'projects' or 'solutions'\n"
-    . "  - Shows business impact, not just technical activity — what changed because of your work?\n"
-    . "  - 20-40 words, dense, zero filler\n"
-    . "  - You MUST include ALL suggested keywords in the bullet — they are required for ATS matching\n"                                                                 
-    . "  - Work the keywords in naturally so the bullet still reads as strong, human writing\n" 
-    . "  - NEVER invent metrics, team sizes, tools, or outcomes not present in existing bullets or candidate story\n"
-    . "  - If existing bullets are thin, write a tighter, stronger version of what is already claimed — do not fabricate\n\n"
-    . "Write exactly {$bulletCount} bullet(s) — one per problem. Apply the MODE labeled on each problem.\n\n"
-    . $problemsText
-    . "Return ONLY a valid JSON array with exactly {$bulletCount} object(s). Each object must have:\n"
-    . "- \"problem_title\": the problem title (copy exactly from above)\n"
-    . "- \"bullet\": the bullet text (no bullet prefix character — just the text)\n\n"
-    . "Return only the JSON array, no other text.";
+
+$prompt = <<<PROMPT
+# ROLE
+
+You are a senior technical recruiter and resume strategist who has reviewed 50,000+ resumes for Google, Meta, Amazon, Microsoft, and Apple. You write resume bullets that pass both ATS keyword filters AND the 6-second human recruiter scan. Your bullets have landed candidates at L5+ engineering roles and senior IC positions at top-tier tech companies.
+
+# TASK
+
+Generate exactly {$bulletCount} resume bullet(s) — one per <problem> block below. Each problem has a MODE attribute telling you which generation strategy to apply.
+
+# THE FAANG BULLET FORMULA
+
+Every elite bullet follows this structure:
+
+  [Strong Action Verb] + [What You Specifically Built/Led/Drove] + [Scope or Scale] + [Quantified Business Impact]
+
+## What separates a great bullet from a mediocre one:
+
+| Weak (avoid)                          | Strong (emulate)                                                                 |
+|---------------------------------------|----------------------------------------------------------------------------------|
+| "Worked on data pipelines"            | "Architected distributed data pipeline processing 2B+ events/day"                |
+| "Helped improve performance"          | "Reduced p99 latency 340ms → 80ms (76%) by rewriting hot path in Rust"           |
+| "Responsible for dashboards"          | "Launched exec-facing Tableau suite used by 12 VPs to steer \$40M budget"        |
+| "Used machine learning for fraud"     | "Deployed XGBoost fraud model cutting false positives 42%, saving \$2.1M/yr"     |
+
+## Non-negotiable rules for every bullet:
+
+1. **Open with a powerful past-tense verb.** Pick from: Architected, Spearheaded, Engineered, Drove, Scaled, Optimized, Launched, Pioneered, Productionized, Orchestrated, Operationalized, Led, Built, Designed, Reduced, Accelerated, Automated, Migrated, Consolidated, Shipped. Never start with "Responsible for," "Helped," "Assisted," or "Worked on."
+2. **Name the specific system.** "the customer-segmentation service," "the anomaly-detection pipeline," "the RAG chatbot" — never vague "solutions," "projects," or "things."
+3. **Lead with scope when it's impressive.** Team size, data volume (GB/TB/QPS), user count, revenue managed, number of stakeholders. If the scope is unimpressive, lead with the verb instead.
+4. **Quantify the outcome.** Use one of: % improvement, \$ saved or generated, time reduced, latency dropped, throughput gained, error rate cut, adoption increased. If the candidate gave numbers — use them exactly.
+5. **Show the business "so-what."** A bullet that ends in "improved latency 40%" is fine. A bullet that ends in "improved latency 40%, unblocking launch of Feature X used by 8M DAU" is elite. Only add the so-what if it is actually in the candidate's story.
+6. **20–40 words. Dense. Zero filler.** Cut every word that doesn't earn its place. No "in order to," "as measured by," "utilized," "successfully," "various."
+7. **ABSOLUTE CONSTRAINT: Do not fabricate.** Never invent tools, team sizes, metrics, customer names, revenue figures, or outcomes not present in the candidate's story, existing bullets, or metrics. If the story lacks a number, write the bullet without a number rather than invent one. Fabrication is the single worst failure mode.
+
+# MODES
+
+## MODE: WRITE
+Generate a brand-new bullet grounded strictly in the <candidate_story>.
+- Extract the strongest achievement from the story.
+- If the story contains numbers, use them exactly as stated.
+- If the story lacks quantification, write a tight qualitative bullet — do NOT invent metrics.
+- Target: 20–35 words.
+
+## MODE: REWRITE
+Upgrade the <existing_bullets> to FAANG standard while preserving every factual claim.
+- Keep the candidate's real metrics, tools, and outcomes — upgrade only the verbs, structure, and density.
+- If <required_keywords> is provided, ALL of them MUST appear in the final bullet, woven in naturally.
+- You may consolidate multiple weak bullets into one stronger bullet ONLY if they describe the same initiative.
+- Target: 20–40 words.
+
+# FEW-SHOT EXAMPLES
+
+## Example 1 — MODE: WRITE
+
+INPUT:
+  candidate_story: "I built a customer segmentation model at my company. Used k-means clustering on purchase data. Marketing team used it for their email campaigns. Campaign conversion went from 4.2% to 5.5%. It runs every week now."
+
+OUTPUT:
+  "Engineered production k-means customer-segmentation pipeline on weekly cadence, powering marketing email targeting and lifting campaign conversion from 4.2% to 5.5% (+31%) across the active subscriber base."
+
+Why it works: specific verb ("Engineered"), names the system ("k-means customer-segmentation pipeline"), specifies cadence ("weekly"), uses exact numbers, ends with business impact.
+
+## Example 2 — MODE: WRITE (story lacks hard metrics)
+
+INPUT:
+  candidate_story: "I created a RAG chatbot with BERT embeddings that pulled from our internal security docs. Analysts used it to look up compliance rules faster."
+
+OUTPUT:
+  "Built Retrieval-Augmented Generation chatbot using BERT embeddings over internal security documentation, enabling analysts to surface compliance rules and response protocols on demand during active investigations."
+
+Why it works: no fabricated metrics (the story had none), but still specific ("BERT embeddings," "internal security documentation," "active investigations") and active.
+
+## Example 3 — MODE: REWRITE
+
+INPUT:
+  existing_bullets: "Made some dashboards for the finance team using Tableau. They said it was helpful."
+  candidate_story: "Finance team had 6 VPs using it for monthly close. Replaced 3 manual Excel reports."
+  required_keywords: ["Tableau", "finance", "executive reporting"]
+
+OUTPUT:
+  "Launched Tableau executive reporting suite for finance leadership, consolidating 3 manual Excel workflows into a single dashboard used by 6 VPs during monthly close."
+
+Why it works: all three required keywords appear naturally, weak phrasing upgraded ("Made" → "Launched"), pulls real scope from candidate_story (6 VPs, 3 reports), no invented numbers.
+
+## Example 4 — What NOT to do
+
+INPUT:
+  candidate_story: "I worked on an ML model for fraud detection."
+
+BAD OUTPUT (fabricated):
+  "Deployed XGBoost fraud model on 4.2M daily transactions, cutting false positives 38% and saving \$1.8M annually."
+
+Why it's bad: candidate never mentioned XGBoost, 4.2M transactions, 38%, or \$1.8M. All fabricated. This is the worst failure mode.
+
+GOOD OUTPUT (honest):
+  "Developed machine-learning fraud-detection model, productionized into the transaction-review workflow to flag suspicious activity earlier in the approval pipeline."
+
+# YOUR REASONING PROCESS
+
+For each problem, internally (do not output this reasoning, only the final JSON):
+1. Read the <candidate_story> and extract every concrete fact: tools named, numbers stated, systems built, business outcomes, scope indicators.
+2. Identify the single strongest achievement to feature.
+3. Pick the verb that most accurately describes what the candidate did.
+4. Draft the bullet using the FAANG formula.
+5. Audit: Does every claim trace back to the input? If any element is fabricated, remove it.
+6. Audit: In REWRITE mode, are all required_keywords present?
+7. Tighten: can any word be cut without losing meaning? Cut it.
+
+# INPUT
+
+{$problemsText}
+
+# OUTPUT FORMAT
+
+Return ONLY a valid JSON array with exactly {$bulletCount} object(s). No prose, no markdown code fences, no commentary. Each object must have exactly two keys:
+
+- "problem_title": the problem title, copied verbatim from the <title> tag above
+- "bullet": the bullet text (plain text, no leading "•" or "-" character)
+
+Example output shape:
+[
+  {"problem_title": "Senior Data Analyst at Renaisons", "bullet": "Engineered ..."},
+  {"problem_title": "Graduate Assistant at East Texas A&M", "bullet": "Spearheaded ..."}
+]
+
+Return only the JSON array now.
+PROMPT;
 
 $requestBody = json_encode([
-    'model' => 'llama-3.3-70b-versatile',
+    'model' => 'openai/gpt-oss-120b',
     'messages' => [['role' => 'user', 'content' => $prompt]],
-    'temperature' => 0.4,
-    'max_tokens' => 1500,
+    'temperature' => 0.3,
+    'max_tokens' => 3000,
 ]);
 
 $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
@@ -89,7 +193,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json',
     'Authorization: Bearer ' . $apiKey,
 ]);
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_TIMEOUT, 45);
 
 $response = curl_exec($ch);
 

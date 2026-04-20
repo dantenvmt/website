@@ -192,14 +192,19 @@ const Experience = () => {
     };
 
     const handleAiInsert = (items) => {
-        items.forEach(({ bullet, experienceId }) => {
-            const exp = experiences.find(e => String(e.id) === String(experienceId));
-            if (!exp) return;
-            const currentBullets = exp.bullets ? exp.bullets.trim() : '';
-            const merged = (!currentBullets || currentBullets === '•')
-                ? bullet
-                : `${currentBullets}\n${bullet}`;
-            updateExperience(exp.id, { ...exp, bullets: merged });
+        setExperiences(currentExperiences => {
+            const updated = currentExperiences.map(exp => {
+                const matching = items.filter(item => String(item.experienceId) === String(exp.id));
+                if (matching.length === 0) return exp;
+                let currentBullets = exp.bullets ? exp.bullets.trim() : '';
+                matching.forEach(({ bullet }) => {
+                    currentBullets = (!currentBullets || currentBullets === '•')
+                        ? bullet
+                        : `${currentBullets}\n${bullet}`;
+                });
+                return { ...exp, bullets: currentBullets };
+            });
+            return updated;
         });
     };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SparklesIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const STEPS = {
@@ -13,17 +13,30 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     const [step, setStep] = useState(STEPS.ANALYZING);
     const [problems, setProblems] = useState([]);
     const [answers, setAnswers] = useState([]);
-    const [experienceConfirmed, setExperienceConfirmed] = useState([]); // null | 'yes' | 'no' per problem
     const [wantsAiRewrite, setWantsAiRewrite] = useState([]);           // null | 'yes' | 'no' per problem
     const [skipOverrides, setSkipOverrides] = useState([]);             // bool per problem — user overrides AI skip
-    const [selectedKeywords, setSelectedKeywords] = useState(new Set()); // keywords user toggled on
+    const [selectedKeywords, setSelectedKeywords] = useState(new Set());
     const [bullets, setBullets] = useState([]);
     const [selected, setSelected] = useState([]);
     const [assignments, setAssignments] = useState([]);
     const [errorMessage, setErrorMessage] = useState('');
     const [retryStep, setRetryStep] = useState(null);
+    const cachedProblems = useRef(null);
+    const cachedJd = useRef(null);
 
     const analyzeProblems = useCallback(async () => {
+        // Use cache if same job description
+        if (cachedProblems.current && cachedJd.current === jobDescription) {
+            const cached = cachedProblems.current;
+            setProblems(cached);
+            setAnswers(cached.map(() => ({ experiences: [{ story: '', metrics: '' }] })));
+            setWantsAiRewrite(cached.map(() => null));
+            setSkipOverrides(cached.map(() => false));
+            setSelectedKeywords(new Set());
+            setStep(STEPS.ANSWER);
+            return;
+        }
+
         setStep(STEPS.ANALYZING);
         setErrorMessage('');
         try {
@@ -40,9 +53,10 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             if (!res.ok) throw new Error('Server error. Please try again.');
             const data = await res.json();
             if (data.status !== 'success') throw new Error(data.message || 'Failed to analyze job description.');
+            cachedProblems.current = data.problems;
+            cachedJd.current = jobDescription;
             setProblems(data.problems);
             setAnswers(data.problems.map(() => ({ experiences: [{ story: '', metrics: '' }] })));
-            setExperienceConfirmed(data.problems.map(() => null));
             setWantsAiRewrite(data.problems.map(() => null));
             setSkipOverrides(data.problems.map(() => false));
             setSelectedKeywords(new Set());
@@ -61,19 +75,21 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             const allExistingBullets = experiences.map(e => e.bullets).filter(Boolean).join('\n');
             const kwList = [...selectedKeywords];
 
-            // Build one payload entry per non-empty experience entry per qualifying problem
             const payload = [];
             problems.forEach((p, idx) => {
                 const hasAiExp = p.ai_has_experience;
+                // Skip problems with no experience unless user overrode
                 if (!hasAiExp && !skipOverrides[idx]) return;
 
-                const confirmed = experienceConfirmed[idx];
-                const rewrite = wantsAiRewrite[idx];
-                if (hasAiExp && !(confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes'))) return;
+                // For detected experience: skip if user chose to keep bullets as-is
+                if (hasAiExp) {
+                    const rewrite = wantsAiRewrite[idx];
+                    if (rewrite === 'no') return;
+                    if (rewrite === null) return;
+                }
 
-                const isRewrite = hasAiExp && confirmed === 'yes' && rewrite === 'yes';
-                // Always include the first entry (no story required); additional entries need a story
-            const nonEmptyExps = answers[idx].experiences.filter((e, eIdx) => eIdx === 0 || e.story.trim().length > 0);
+                const isRewrite = hasAiExp && wantsAiRewrite[idx] === 'yes';
+                const nonEmptyExps = answers[idx].experiences.filter((e, eIdx) => eIdx === 0 || e.story.trim().length > 0);
 
                 nonEmptyExps.forEach(exp => {
                     payload.push({
@@ -106,7 +122,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
             setRetryStep('generate');
             setStep(STEPS.ERROR);
         }
-    }, [problems, answers, experienceConfirmed, wantsAiRewrite, skipOverrides, experiences, selectedKeywords]);
+    }, [problems, answers, wantsAiRewrite, skipOverrides, experiences, selectedKeywords]);
 
     useEffect(() => {
         analyzeProblems();
@@ -119,22 +135,14 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
     }, [onClose]);
 
     const allResolved = answers.length > 0 && problems.every((problem, i) => {
-        if (!problem.ai_has_experience) return true; // skipped or override — first entry always usable
-        const confirmed = experienceConfirmed[i];
-        const rewrite = wantsAiRewrite[i];
-        if (confirmed === null) return false;
-        if (confirmed === 'no') return true; // first entry always included
-        if (confirmed === 'yes' && rewrite === null) return false;
-        return true; // rewrite yes or rewrite no — both resolved
+        if (!problem.ai_has_experience) return true;
+        if (wantsAiRewrite[i] === null) return false;
+        return true;
     });
 
-    const hasAtLeastOneToGenerate = problems.some((problem, i) => {
-        if (!problem.ai_has_experience) return skipOverrides[i]; // first entry included once override active
-        const confirmed = experienceConfirmed[i];
-        const rewrite = wantsAiRewrite[i];
-        if (confirmed === 'no') return true;
-        if (confirmed === 'yes' && rewrite === 'yes') return true;
-        return false;
+    const hasAtLeastOneToGenerate = problems.some((p, i) => {
+        if (!p.ai_has_experience) return skipOverrides[i];
+        return wantsAiRewrite[i] === 'yes';
     });
 
     const allAnswersFilled = allResolved && hasAtLeastOneToGenerate;
@@ -159,19 +167,6 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                 ...updated[problemIndex],
                 experiences: [...updated[problemIndex].experiences, { story: '', metrics: '' }],
             };
-            return updated;
-        });
-    };
-
-    const updateConfirmed = (index, value) => {
-        setExperienceConfirmed(prev => {
-            const updated = [...prev];
-            updated[index] = value || null;
-            return updated;
-        });
-        setWantsAiRewrite(prev => {
-            const updated = [...prev];
-            updated[index] = null;
             return updated;
         });
     };
@@ -247,8 +242,8 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
         onClose();
     };
 
-    // Reusable experience entry fields renderer
-    const renderExperienceFields = (problemIndex, showMetrics) => {
+    // Two explicit boxes: situation/examples + KPIs/metrics
+    const renderExperienceFields = (problemIndex) => {
         const exps = answers[problemIndex]?.experiences || [];
         const multiEntry = exps.length > 1;
         return (
@@ -260,7 +255,10 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                 Experience {expIdx + 1}
                             </p>
                         )}
-                        {expIdx > 0 && (
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                                What you did & the situation
+                            </p>
                             <textarea
                                 className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
                                 rows={3}
@@ -268,8 +266,11 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                 onChange={(e) => updateAnswer(problemIndex, expIdx, 'story', e.target.value)}
                                 placeholder="Briefly describe the situation and what you did..."
                             />
-                        )}
-                        {showMetrics && (
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                                KPIs & Metrics
+                            </p>
                             <input
                                 type="text"
                                 className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
@@ -277,7 +278,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                 onChange={(e) => updateAnswer(problemIndex, expIdx, 'metrics', e.target.value)}
                                 placeholder="e.g. reduced churn by 30%, saved $200K/year"
                             />
-                        )}
+                        </div>
                     </div>
                 ))}
                 <button
@@ -317,7 +318,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                         <div>
                             <p className="text-sm text-gray-400 mb-6">Here's what this role actually needs to solve:</p>
 
-                            {/* Global keyword chip tray — shown once above all problems */}
+                            {/* Global keyword chip tray */}
                             {keywordChips.length > 0 && (
                                 <div className="mb-6 bg-[#0f172a] border border-gray-700 rounded-lg p-4">
                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-2">
@@ -355,12 +356,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
 
                             <div className="space-y-6">
                                 {problems.map((problem, i) => {
-                                    const confirmed = experienceConfirmed[i];
-                                    const rewrite = wantsAiRewrite[i];
                                     const hasAiExp = problem.ai_has_experience;
-                                    const showWriteBox = hasAiExp && (
-                                        confirmed === 'no' || (confirmed === 'yes' && rewrite === 'yes')
-                                    );
 
                                     return (
                                         <div key={problem.id} className="bg-[#0f172a] border border-gray-700 rounded-lg p-4 space-y-3">
@@ -369,6 +365,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                 <p className="text-xs text-gray-400 mt-1">{problem.description}</p>
                                             </div>
 
+                                            {/* No experience detected */}
                                             {!hasAiExp && !skipOverrides[i] && (
                                                 <div className="flex items-center justify-between">
                                                     <p className="text-xs text-gray-500 italic">No relevant experience detected.</p>
@@ -382,6 +379,7 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                 </div>
                                             )}
 
+                                            {/* No experience — user chose to write anyway */}
                                             {!hasAiExp && skipOverrides[i] && (
                                                 <div className="space-y-3">
                                                     <div className="flex items-center justify-between">
@@ -394,39 +392,30 @@ const AIWriteExperienceModal = ({ jobDescription, experiences, aiAnalysis, onIns
                                                             ✕ Cancel
                                                         </button>
                                                     </div>
-                                                    {renderExperienceFields(i, true)}
+                                                    {renderExperienceFields(i)}
                                                 </div>
                                             )}
 
+                                            {/* Experience detected */}
                                             {hasAiExp && (
                                                 <div className="space-y-3">
+                                                    <p className="text-xs text-green-400 font-semibold">Relevant experience detected</p>
+
                                                     <select
-                                                        value={confirmed || ''}
-                                                        onChange={(e) => updateConfirmed(i, e.target.value)}
+                                                        value={wantsAiRewrite[i] || ''}
+                                                        onChange={(e) => updateWantsRewrite(i, e.target.value)}
                                                         className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
                                                     >
-                                                        <option value="">Do you have experience solving this?</option>
-                                                        <option value="yes">Yes</option>
-                                                        <option value="no">No</option>
+                                                        <option value="">Want AI to rewrite your bullets with relevant keywords?</option>
+                                                        <option value="yes">Yes, rewrite with keywords</option>
+                                                        <option value="no">No, I'll keep my bullets as-is</option>
                                                     </select>
 
-                                                    {confirmed === 'yes' && (
-                                                        <select
-                                                            value={rewrite || ''}
-                                                            onChange={(e) => updateWantsRewrite(i, e.target.value)}
-                                                            className="w-full bg-[#1e293b] border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                        >
-                                                            <option value="">Want AI to rewrite your bullets with relevant keywords?</option>
-                                                            <option value="yes">Yes, rewrite with keywords</option>
-                                                            <option value="no">No, I'll keep my bullets as-is</option>
-                                                        </select>
-                                                    )}
-
-                                                    {confirmed === 'yes' && rewrite === 'no' && (
+                                                    {wantsAiRewrite[i] === 'no' && (
                                                         <p className="text-xs text-gray-500 italic">Skipped — keeping your existing bullets.</p>
                                                     )}
 
-                                                    {showWriteBox && renderExperienceFields(i, true)}
+                                                    {wantsAiRewrite[i] === 'yes' && renderExperienceFields(i)}
                                                 </div>
                                             )}
                                         </div>

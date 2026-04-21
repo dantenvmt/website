@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LatestRoles from '../components/home/LatestRoles'; // Make sure this path matches your folder structure
 import { useNavigate } from 'react-router-dom';
+import HowItWorks from '../components/home/HowItWorks';    // ← add
+import FAQ from '../components/home/FAQ';
 const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 }) => {
     const [count, setCount] = useState(0);
 
@@ -50,6 +52,15 @@ const HomePage = () => {
     };
     return (
         <div className="min-h-screen text-white font-sans">
+            {/* subtle teal glow at the top */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{
+                    background:
+                        'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(6,182,212,0.08), transparent 70%)',
+                }}
+            />
             {/* --- HERO SECTION --- */}
             <section className="py-20 px-6 max-w-5xl mx-auto text-center">
                 <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-10 text-white">
@@ -119,10 +130,11 @@ const HomePage = () => {
             </section>
 
             {/* --- LATEST ROLES SECTION --- */}
-            {/* This will automatically render the grid with the 
-                8 fake roles you set up in LatestRoles.jsx 
-            */}
             <LatestRoles />
+            {/* --- How it works --- */}
+            <HowItWorks />
+            {/* --- FAQ --- */}
+            <FAQ />
 
         </div>
     );

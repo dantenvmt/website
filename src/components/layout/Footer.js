@@ -1,7 +1,7 @@
 import React from 'react';
 
 const SocialIcon = ({ href = "#", children }) => (
-    <a href={href} className="text-neutral-400 hover:text-white transition-colors">
+    <a href={href} className="text-neutral-400 hover:text-[#06b6d4] transition-colors">
         {children}
     </a>
 );
@@ -11,10 +11,10 @@ const Footer = () => {
     const companyName = "Renaisons";
 
     return (
-        <footer className="py-8">
+        <footer className="bg-gradient-to-b from-[#0a0d14] to-[#050709] border-t border-white/[0.08] py-8">
             <div className="max-w-7xl mx-auto px-8 md:px-12">
                 {/* Bottom Bar */}
-                <div className="mt-8 flex flex-col md:flex-row justify-between items-center text-sm text-neutral-500">
+                <div className="flex flex-col md:flex-row justify-between items-center text-sm text-neutral-500">
                     <div className="flex items-center gap-4 mb-4 md:mb-0">
                         <span>{companyName} © {currentYear}</span>
                     </div>

@@ -1276,16 +1276,45 @@ function JobsPage() {
         });
     }, [jobsQuery.data]);
     /* ---- recommended carousel ---- */
+    /* ---- featured carousel: top 8 Business/Data Analytics roles ---- */
     const recommendedQuery = useQuery({
-        queryKey: ['recommended', matchProfile?.skills, matchProfile?.experience_years],
-        queryFn: () =>
-            api.jobs.recommended({
-                skills: matchProfile?.skills,
-                experienceYears: matchProfile?.experience_years,
-                userId: guestUserId,
-            }),
-        enabled: true,
-        staleTime: 5 * 60 * 1000,
+        queryKey: ['featured-analytics'],
+        queryFn: async () => {
+            // Run two queries in parallel since the backend doesn't support OR on q
+            const [dataAnalyst, businessAnalyst] = await Promise.all([
+                apiFetch(`/api/v1/jobs?${new URLSearchParams({
+                    q: 'data analyst',
+                    limit: '12',
+                    active_only: 'false',
+                    stale_after_days: '30',
+                    posted_within_days: '30',
+                })}`),
+                apiFetch(`/api/v1/jobs?${new URLSearchParams({
+                    q: 'business analyst',
+                    limit: '12',
+                    active_only: 'false',
+                    stale_after_days: '30',
+                    posted_within_days: '30',
+                })}`),
+            ]);
+
+            // Merge, dedupe by id, sort by posted_date desc, take top 8
+            const merged = [...(dataAnalyst.items || []), ...(businessAnalyst.items || [])];
+            const seen = new Set();
+            const unique = merged.filter((job) => {
+                if (seen.has(job.id)) return false;
+                seen.add(job.id);
+                return true;
+            });
+            unique.sort((a, b) => {
+                const aDate = new Date(a.posted_date || a.created_at || 0).getTime();
+                const bDate = new Date(b.posted_date || b.created_at || 0).getTime();
+                return bDate - aDate;
+            });
+
+            return { items: unique.slice(0, 8) };
+        },
+        staleTime: 10 * 60 * 1000, // cache for 10 minutes
     });
     const recommendedJobs = recommendedQuery.data?.items ?? [];
 
@@ -1405,9 +1434,7 @@ function JobsPage() {
         <div
             className={cn(
                 'min-h-screen text-white',
-                highContrast
-                    ? 'bg-black'
-                    : 'bg-gradient-to-b from-[#0a0d14] via-[#0a0d14] to-[#050709]',
+                highContrast ? 'bg-black' : 'bg-[#0a0d14]',
             )}
         >
             {/* Header */}

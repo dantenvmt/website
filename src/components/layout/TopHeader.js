@@ -81,8 +81,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
             return (
                 <Menu as="div" className="relative inline-block text-left">
                     <div>
-                        <Menu.Button className="flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75">
-                            <UserCircleIcon className="h-6 w-6" />
+                        <Menu.Button className="flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md text-neutral-300 hover:bg-white/5 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75">                            <UserCircleIcon className="h-6 w-6" />
                             <span className="hidden md:inline capitalize">{displayName}</span>
                             <ChevronDownIcon className="h-4 w-4 text-neutral-400" />
                         </Menu.Button>
@@ -96,11 +95,11 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                         leaveFrom="transform opacity-100 scale-100"
                         leaveTo="transform opacity-0 scale-95"
                     >
-                        <Menu.Items className="absolute right-0 mt-2 w-64 origin-top-right divide-y divide-neutral-700 rounded-md bg-neutral-900 shadow-lg ring-1 ring-black ring-opacity-5 border border-neutral-700 focus:outline-none z-50">
+                        <Menu.Items className="absolute right-0 mt-2 w-64 origin-top-right divide-y divide-white/5 rounded-md bg-[#0b0e14]/95 backdrop-blur-md shadow-lg ring-1 ring-black ring-opacity-5 border border-white/10 focus:outline-none z-50">
                             {/* User Info Header */}
-                            <div className="px-1 py-1 ">
+                            <div className="px-1 py-1">
                                 <div className="flex items-center space-x-3 px-4 py-3 mb-1">
-                                    <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
+                                    <div className="h-10 w-10 rounded-full bg-[#06b6d4] flex items-center justify-center text-white font-bold text-lg">
                                         {displayName.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="overflow-hidden">
@@ -113,7 +112,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                                     <>
                                         <Menu.Item>
                                             {({ active }) => (
-                                                <Link to="/admin" className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                                <Link to="/admin" className={`${active ? 'bg-white/5 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                                     <ShieldCheckIcon className="mr-3 h-5 w-5" />
                                                     Admin Dashboard
                                                 </Link>
@@ -121,7 +120,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                                         </Menu.Item>
                                         <Menu.Item>
                                             {({ active }) => (
-                                                <Link to="/admin/content-manager" className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                                <Link to="/admin/content-manager" className={`${active ? 'bg-white/5 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                                     <NewspaperIcon className="mr-3 h-5 w-5" />
                                                     Manage Content
                                                 </Link>
@@ -134,7 +133,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                                 {user.role === 'client' && (
                                     <Menu.Item>
                                         {({ active }) => (
-                                            <Link to="/my-status" className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                            <Link to="/my-status" className={`${active ? 'bg-white/5 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                                 <ClipboardDocumentListIcon className="mr-3 h-5 w-5" />
                                                 My Status
                                             </Link>
@@ -146,7 +145,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                                 {user.role === 'user' && (
                                     <Menu.Item>
                                         {({ active }) => (
-                                            <Link to="/dashboard" className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                            <Link to="/dashboard" className={`${active ? 'bg-white/5 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                                 <ClipboardDocumentListIcon className="mr-3 h-5 w-5" />
                                                 Dashboard
                                             </Link>
@@ -159,7 +158,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                             <div className="px-1 py-1">
                                 <Menu.Item>
                                     {({ active }) => (
-                                        <Link to="/settings/change-password" className={`${active ? 'bg-neutral-800 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                        <Link to="/settings/change-password" className={`${active ? 'bg-white/5 text-white' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                             <KeyIcon className="mr-3 h-5 w-5" />
                                             Change Password
                                         </Link>
@@ -171,7 +170,7 @@ const TopHeader = ({ isNavOpen, setIsNavOpen }) => {
                             <div className="px-1 py-1">
                                 <Menu.Item>
                                     {({ active }) => (
-                                        <button onClick={handleLogout} className={`${active ? 'bg-neutral-800 text-red-400' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
+                                        <button onClick={handleLogout} className={`${active ? 'bg-white/5 text-red-400' : 'text-neutral-300'} group flex w-full items-center rounded-md px-4 py-3 text-sm`}>
                                             <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5" />
                                             Log out
                                         </button>

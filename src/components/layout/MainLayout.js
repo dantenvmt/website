@@ -9,7 +9,6 @@ const MainLayout = () => {
     const [isNavOpen, setIsNavOpen] = useState(false);
     const [isDesktopNavOpen, setIsDesktopNavOpen] = useState(true);
 
-
     return (
         <div className="text-white font-sans antialiased flex min-h-screen">
             <SideNav
@@ -17,7 +16,6 @@ const MainLayout = () => {
                 isDesktopNavOpen={isDesktopNavOpen}
                 setIsNavOpen={setIsNavOpen}
                 setIsDesktopNavOpen={setIsDesktopNavOpen}
-
             />
             <div className="flex-1 flex flex-col">
                 <TopHeader
@@ -26,8 +24,8 @@ const MainLayout = () => {
                 />
                 <main className="flex-grow">
                     <Outlet />
-                    <Footer />
                 </main>
+                <Footer />
             </div>
         </div>
     );

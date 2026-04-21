@@ -100,8 +100,9 @@ const EditorLayout = () => {
         if (isSaving) return;
         setIsSaving(true);
 
-        // Helper for array saving
-        const saveList = async (list, endpoint, idField, setter) => {
+        const failures = [];
+
+        const saveList = async (list, endpoint, idField, setter, label) => {
             const promises = list.map(item => {
                 let isValid = false;
                 if (endpoint.includes('experience')) isValid = !!(item.role || item.company);
@@ -110,15 +111,30 @@ const EditorLayout = () => {
                 else if (endpoint.includes('award')) isValid = !!item.name;
                 else if (endpoint.includes('certification')) isValid = !!item.name;
 
-                if (isValid) {
-                    return fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...item, resume_id: resumeId }),
-                        credentials: 'include' // <-- FIX: Added missing credentials
-                    }).then(res => res.json()).then(d => d.status === 'success' ? { oldId: item.id, newId: d[idField] } : null).catch(() => null);
-                }
-                return Promise.resolve(null);
+                if (!isValid) return Promise.resolve(null);
+
+                return fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...item, resume_id: resumeId }),
+                    credentials: 'include'
+                })
+                    .then(async res => {
+                        if (!res.ok) {
+                            failures.push(`${label}: HTTP ${res.status}`);
+                            return null;
+                        }
+                        const d = await res.json();
+                        if (d.status !== 'success') {
+                            failures.push(`${label}: ${d.message || 'save rejected'}`);
+                            return null;
+                        }
+                        return { oldId: item.id, newId: d[idField] };
+                    })
+                    .catch(err => {
+                        failures.push(`${label}: ${err.message}`);
+                        return null;
+                    });
             });
 
             const results = await Promise.all(promises);
@@ -126,51 +142,71 @@ const EditorLayout = () => {
             if (updates.length > 0 && setter) {
                 setter(list.map(p => {
                     const u = updates.find(up => up.oldId === p.id);
-                    return u ? { ...p, id: u.newId } : p;
+                    return u && u.newId != null ? { ...p, id: u.newId } : p;
                 }));
             }
         };
 
+        const checkSingle = async (res, label) => {
+            if (!res.ok) { failures.push(`${label}: HTTP ${res.status}`); return; }
+            const d = await res.json();
+            if (d.status !== 'success') failures.push(`${label}: ${d.message || 'save rejected'}`);
+        };
+
         try {
-            await Promise.all([
-                // Save Single Objects
+            const [contactRes, summaryRes, skillsRes] = await Promise.all([
                 fetch('https://renaisons.com/api/save_contact.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ resume_id: resumeId, ...contact }),
-                    credentials: 'include' // <-- FIX: Added missing credentials
+                    credentials: 'include'
                 }),
                 fetch('https://renaisons.com/api/save_summary.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume_id: resumeId, summary: summary }), // <-- FIX: Changed summaries_description to summary
-                    credentials: 'include' // <-- FIX: Added missing credentials
+                    body: JSON.stringify({ resume_id: resumeId, summary }),
+                    credentials: 'include'
                 }),
                 fetch('https://renaisons.com/api/save_skill.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ resume_id: resumeId, skills_description: skills }),
-                    credentials: 'include' // <-- FIX: Added missing credentials
-                }),
-                // Save Arrays
-                saveList(experiences, 'https://renaisons.com/api/save_experience.php', 'experience_id', setExperiences),
-                saveList(educations, 'https://renaisons.com/api/save_education.php', 'education_id', setEducations),
-                saveList(projects, 'https://renaisons.com/api/save_project.php', 'project_id', setProjects),
-                saveList(awards, 'https://renaisons.com/api/save_award.php', 'award_id', setAwards),
-                saveList(certifications, 'https://renaisons.com/api/save_certification.php', 'certification_id', setCertifications),
+                    credentials: 'include'
+                })
             ]);
 
-            navigate(`/resume/${resumeId}/final`, { state: { resumeName } });
+            await Promise.all([
+                checkSingle(contactRes, 'Contact'),
+                checkSingle(summaryRes, 'Summary'),
+                checkSingle(skillsRes, 'Skills'),
+                saveList(experiences, 'https://renaisons.com/api/save_experience.php', 'experience_id', setExperiences, 'Experience'),
+                saveList(educations, 'https://renaisons.com/api/save_education.php', 'education_id', setEducations, 'Education'),
+                saveList(projects, 'https://renaisons.com/api/save_project.php', 'project_id', setProjects, 'Project'),
+                saveList(awards, 'https://renaisons.com/api/save_award.php', 'award_id', setAwards, 'Award'),
+                saveList(certifications, 'https://renaisons.com/api/save_certification.php', 'certification_id', setCertifications, 'Certification'),
+            ]);
 
+            if (failures.length > 0) {
+                console.error('Save failures:', failures);
+                setFeedbackModalState({
+                    isOpen: true,
+                    title: 'Some changes did not save',
+                    message: failures.join('\n'),
+                    isError: true
+                });
+                setIsSaving(false);
+                return;
+            }
+
+            navigate(`/resume/${resumeId}/final`, { state: { resumeName } });
         } catch (error) {
             console.error("Save error:", error);
             setFeedbackModalState({
                 isOpen: true,
-                title: 'Save Warning',
-                message: 'Data saved, but a network check failed. Proceeding to preview.',
+                title: 'Save Error',
+                message: `Failed to save: ${error.message}`,
                 isError: true
             });
-            setTimeout(() => navigate(`/resume/${resumeId}/final`, { state: { resumeName } }), 2000);
         } finally {
             setIsSaving(false);
         }

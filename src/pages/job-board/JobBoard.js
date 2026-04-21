@@ -1,22 +1,58 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// src/pages/job-board/JobBoard.js
+//
+// Merged JobBoard: combines the existing renaisons.com job board with features
+// from the "bruh" (Vite/TS) frontend:
+//   - FastAPI backend on https://api.renaisons.com (configurable via env)
+//   - Cursor-based pagination (/api/v1/jobs)
+//   - Recommended jobs carousel (/api/v1/jobs/recommended)
+//   - Per-job match score (/api/v1/jobs/{id}/match)
+//   - Resume match profile auto-extraction (/api/v1/resume/match-profile)
+//   - Mobile swipe card stack (< 640px)
+//   - High-contrast toggle (localStorage persisted)
+//   - Guest user ID in sessionStorage for resume-upload association
+//
+// Auth/resume/articles still call https://renaisons.com (your PHP backend).
+// Only the job-board data layer talks to the FastAPI backend.
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, useInfiniteQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+    QueryClient,
+    QueryClientProvider,
+    useInfiniteQuery,
+    useQuery,
+} from '@tanstack/react-query';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
     Search, MapPin, Briefcase, Bookmark, BookmarkCheck, Clock, DollarSign,
-    X, ChevronUp, Heart, WandSparkles, Loader2, Trash2, ExternalLink,
-    Upload, FileText, Sparkles, BarChart3, Compass, ShieldCheck, ChevronDown
+    X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Heart, WandSparkles,
+    Loader2, Trash2, ExternalLink, Upload, FileText, Sparkles, BarChart3,
+    Compass, ShieldCheck, ArrowUpRight, Eye, EyeOff,
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
+
 function cn(...inputs) {
     return twMerge(clsx(inputs));
 }
 
-// --------------------------------------------------------------------------
-// Constants & API
-// --------------------------------------------------------------------------
+/* -------------------------------------------------------------------------
+ *  Config & constants
+ * ---------------------------------------------------------------------- */
+
+// FastAPI backend (bruh2) — deployed on the VPS, reverse-proxied via nginx.
+// Set REACT_APP_JOBS_API_URL in your Hostinger build env.
+const JOBS_API_URL = process.env.REACT_APP_JOBS_API_URL || 'https://api.renaisons.com';
+const JOBS_API_KEY = process.env.REACT_APP_JOBS_API_KEY || '';
+
+// PHP backend (for resume upload/extract + AI summary/optimize that your site
+// already uses). Keep calling renaisons.com for these.
+const SITE_API_URL = process.env.REACT_APP_API_URL || 'https://renaisons.com';
+
+const PAGE_SIZE = 48;
+const CONTRAST_STORAGE_KEY = 'job_feed_high_contrast';
+const GUEST_USER_ID_KEY = 'guest_user_id';
 
 const JOB_SOURCES = [
     { value: 'USAJobs', label: 'USAJobs' },
@@ -32,945 +68,1582 @@ const JOB_SOURCES = [
     { value: 'HN RSS', label: 'HN RSS' },
 ];
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://renaisons.com';
-const PAGE_SIZE = 48;
+/* -------------------------------------------------------------------------
+ *  Helpers
+ * ---------------------------------------------------------------------- */
+
+function getOrCreateGuestUserId() {
+    if (typeof window === 'undefined') return 'guest';
+    const stored = window.sessionStorage.getItem(GUEST_USER_ID_KEY);
+    if (stored) return stored;
+    const id =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(GUEST_USER_ID_KEY, id);
+    return id;
+}
+
+function getInitialContrast() {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(CONTRAST_STORAGE_KEY) === 'true';
+}
+
+function formatPosted(dateString) {
+    if (!dateString) return 'Recently';
+    try {
+        const then = new Date(dateString).getTime();
+        const diff = Date.now() - then;
+        const days = Math.floor(diff / 86400000);
+        if (days < 1) return 'Today';
+        if (days === 1) return 'Yesterday';
+        if (days < 7) return `${days}d ago`;
+        if (days < 30) return `${Math.floor(days / 7)}w ago`;
+        return `${Math.floor(days / 30)}mo ago`;
+    } catch {
+        return 'Recently';
+    }
+}
+
+async function apiFetch(path, opts = {}) {
+    const url = `${JOBS_API_URL}${path}`;
+    const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+    const res = await fetch(url, {
+        ...opts,
+        headers: {
+            ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+            ...(JOBS_API_KEY ? { 'X-API-Key': JOBS_API_KEY } : {}),
+            ...(opts.headers || {}),
+        },
+    });
+    if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+            const body = await res.json();
+            detail = body.detail || detail;
+        } catch { /* ignore */ }
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
+/* -------------------------------------------------------------------------
+ *  API client (FastAPI backend)
+ * ---------------------------------------------------------------------- */
+
 const api = {
     jobs: {
-        list: async ({ pageParam = 0, q, location, source, remote }) => {
-            const params = new URLSearchParams({ offset: pageParam, limit: PAGE_SIZE });
+        list: async ({ pageParam = null, q, location, source, remote }) => {
+            const params = new URLSearchParams({
+                limit: String(PAGE_SIZE),
+                active_only: 'false',
+                stale_after_days: '60',
+                posted_within_days: '14',
+            });
+            if (pageParam) params.append('cursor', pageParam);
             if (q) params.append('q', q);
             if (location) params.append('location', location);
             if (source) params.append('source', source);
             if (remote) params.append('remote', 'true');
-
-            const res = await fetch(`${API_URL}/api/get_jobs.php?${params}`);
-            if (!res.ok) throw new Error('Failed to fetch jobs');
-            return res.json();
-        }
+            return apiFetch(`/api/v1/jobs?${params}`);
+        },
+        recommended: async ({ skills, experienceYears, userId }) => {
+            const params = new URLSearchParams({
+                limit: '8',
+                active_only: 'false',
+                stale_after_days: '60',
+            });
+            if (skills && skills.length) {
+                params.append('profile_skills', skills.join(','));
+            }
+            if (experienceYears !== null && experienceYears !== undefined) {
+                params.append('profile_experience_years', String(experienceYears));
+            }
+            if (userId) params.append('user_id', userId);
+            return apiFetch(`/api/v1/jobs/recommended?${params}`);
+        },
+        matchScore: async (jobId, skills, experienceYears) =>
+            apiFetch(`/api/v1/jobs/${jobId}/match`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    profile_skills: skills,
+                    profile_experience_years: experienceYears,
+                }),
+            }),
+        summary: async (jobId) => apiFetch(`/api/v1/jobs/${jobId}/summary`, {
+            method: 'POST',
+            body: JSON.stringify({}),
+        }),
     },
-    ai: {
-        summary: async (id) => {
-            const res = await fetch(`${API_URL}/api/v1/jobs/${id}/summary`);
-            if (!res.ok) throw new Error('Failed to fetch summary');
-            return res.json();
-        },
-        extractResume: async (file) => {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(`${API_URL}/api/v1/resume/extract`, { method: 'POST', body: formData });
-            if (!res.ok) throw new Error('Extraction failed');
-            return res.json();
-        },
-        analyzeResume: async (text, level) => {
-            const res = await fetch(`${API_URL}/api/v1/resume/analyze`, {
+    resume: {
+        upload: async (userId, file) => {
+            const form = new FormData();
+            form.append('file', file);
+            return apiFetch(`/api/v1/resume?user_id=${encodeURIComponent(userId)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, critique_level: level })
+                body: form,
             });
-            if (!res.ok) throw new Error('Analysis failed');
-            return res.json();
         },
-        optimizeResumeForJob: async (jobId, resumeText, level) => {
-            const res = await fetch(`${API_URL}/api/v1/resume/optimize/${jobId}`, {
+        matchProfile: async (userId) =>
+            apiFetch(`/api/v1/resume/match-profile?user_id=${encodeURIComponent(userId)}`),
+        analyze: async (userId, critiqueLevel) =>
+            apiFetch(`/api/v1/resume/analyze?user_id=${encodeURIComponent(userId)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resume_text: resumeText, critique_level: level })
-            });
-            if (!res.ok) throw new Error('Optimization failed');
-            return res.json();
-        }
-    }
+                body: JSON.stringify({ critique_level: critiqueLevel }),
+            }),
+        optimize: async (jobId, userId, mode) =>
+            apiFetch(`/api/v1/jobs/${jobId}/optimize-resume?user_id=${encodeURIComponent(userId)}`, {
+                method: 'POST',
+                body: JSON.stringify({ mode }),
+            }),
+    },
 };
-function formatSalary(job) {
-    if (job.salary) return job.salary;
 
-    const min = job.salary_min ? Number(job.salary_min) : null;
-    const max = job.salary_max ? Number(job.salary_max) : null;
+/* -------------------------------------------------------------------------
+ *  Hooks
+ * ---------------------------------------------------------------------- */
 
-    const formatNumber = (value) =>
-        new Intl.NumberFormat('en-US', {
-            maximumFractionDigits: 0,
-        }).format(value);
-
-    if (min && max) return `$${formatNumber(min)} - $${formatNumber(max)}`;
-    if (min) return `$${formatNumber(min)}+`;
-    if (max) return `Up to $${formatNumber(max)}`;
-
-    return null;
-}
-
-function getWorkTypeBadges(job) {
-    const badges = [];
-
-    if (job.remote) badges.push('Remote');
-
-    const text = `${job.employment_type || ''} ${job.job_type || ''} ${job.type || ''}`.toLowerCase();
-
-    if (text.includes('full')) badges.push('Full-time');
-    if (text.includes('part')) badges.push('Part-time');
-    if (text.includes('contract')) badges.push('Contract');
-    if (text.includes('intern')) badges.push('Internship');
-
-    return [...new Set(badges)];
-}
-
-function formatExperience(job) {
-    if (job.years_experience) {
-        return `${job.years_experience} yrs`;
-    }
-
-    if (job.experience_years) {
-        return `${job.experience_years} yrs`;
-    }
-
-    if (job.seniority) {
-        const value = String(job.seniority).toLowerCase();
-
-        if (value.includes('intern')) return '0-1 yrs';
-        if (value.includes('junior') || value.includes('entry')) return '0-2 yrs';
-        if (value.includes('associate')) return '1-3 yrs';
-        if (value.includes('mid')) return '2-5 yrs';
-        if (value.includes('senior')) return '5+ yrs';
-        if (value.includes('staff')) return '7+ yrs';
-        if (value.includes('principal')) return '8+ yrs';
-        if (value.includes('lead')) return '6+ yrs';
-        if (value.includes('manager')) return '5+ yrs';
-    }
-
-    return null;
-}
-// --------------------------------------------------------------------------
-// Hooks
-// --------------------------------------------------------------------------
-function useJobsList(filters) {
-    return useInfiniteQuery({
-        queryKey: ['jobs', filters],
-        queryFn: ({ pageParam = 0 }) => api.jobs.list({ ...filters, pageParam }),
-        getNextPageParam: (lastPage, allPages) => {
-            if (!lastPage || !lastPage.data || lastPage.data.length < PAGE_SIZE) return undefined;
-            return allPages.length * PAGE_SIZE;
-        }
+function useMediaQuery(query) {
+    const [matches, setMatches] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia(query).matches;
     });
-}
-function getTimeAgo(dateValue) {
-    if (!dateValue) return 'Recent';
-
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) return 'Recent';
-
-    const now = new Date();
-    const diffMs = now - date;
-
-    if (diffMs < 0) return 'Recent';
-
-    const minute = 60 * 1000;
-    const hour = 60 * minute;
-    const day = 24 * hour;
-    const week = 7 * day;
-    const month = 30 * day;
-
-    if (diffMs < minute) {
-        return 'Just now';
-    }
-
-    if (diffMs < hour) {
-        const mins = Math.floor(diffMs / minute);
-        return mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
-    }
-
-    if (diffMs < day) {
-        const hours = Math.floor(diffMs / hour);
-        return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-    }
-
-    if (diffMs < week) {
-        const days = Math.floor(diffMs / day);
-        return days === 1 ? '1 day ago' : `${days} days ago`;
-    }
-
-    if (diffMs < month) {
-        const weeks = Math.floor(diffMs / week);
-        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
-    }
-
-    const months = Math.floor(diffMs / month);
-    return months === 1 ? '1 month ago' : `${months} months ago`;
+    useEffect(() => {
+        const mq = window.matchMedia(query);
+        const onChange = (e) => setMatches(e.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, [query]);
+    return matches;
 }
 
 function useSavedJobs() {
-    const [savedJobs, setSavedJobs] = useState([]);
+    const [savedJobs, setSavedJobs] = useState(() => {
+        try {
+            const raw = localStorage.getItem('saved_jobs');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
 
     useEffect(() => {
-        try {
-            const stored = localStorage.getItem('job_saved_v1');
-            if (stored) setSavedJobs(JSON.parse(stored));
-        } catch (e) { }
+        localStorage.setItem('saved_jobs', JSON.stringify(savedJobs));
+    }, [savedJobs]);
+
+    const isJobSaved = useCallback(
+        (job) => savedJobs.some((j) => j.id === job.id),
+        [savedJobs],
+    );
+
+    const toggleSaved = useCallback((job) => {
+        setSavedJobs((prev) =>
+            prev.some((j) => j.id === job.id)
+                ? prev.filter((j) => j.id !== job.id)
+                : [...prev, job],
+        );
     }, []);
 
-    const save = useCallback((jobs) => {
-        setSavedJobs(jobs);
-        localStorage.setItem('job_saved_v1', JSON.stringify(jobs));
+    const unsaveJob = useCallback((job) => {
+        setSavedJobs((prev) => prev.filter((j) => j.id !== job.id));
     }, []);
 
-    const toggleSaved = (job) => {
-        const exists = savedJobs.find((j) => j.id === job.id);
-        if (exists) save(savedJobs.filter((j) => j.id !== job.id));
-        else save([...savedJobs, job]);
-    };
-
-    const isJobSaved = (job) => !!savedJobs.find((j) => j.id === job.id);
-    const unsaveJob = (id) => save(savedJobs.filter((j) => j.id !== id));
-    const clearAll = () => save([]);
+    const clearAll = useCallback(() => setSavedJobs([]), []);
 
     return { savedJobs, isJobSaved, toggleSaved, unsaveJob, clearAll };
 }
 
-function useDebounce(value, delay) {
-    const [debouncedValue, setDebouncedValue] = useState(value);
-    useEffect(() => {
-        const handler = setTimeout(() => setDebouncedValue(value), delay);
-        return () => clearTimeout(handler);
-    }, [value, delay]);
-    return debouncedValue;
-}
+/* -------------------------------------------------------------------------
+ *  Small presentational primitives
+ * ---------------------------------------------------------------------- */
 
-// --------------------------------------------------------------------------
-// Hardcoded UI Components
-// --------------------------------------------------------------------------
-
-const Badge = ({ children, variant = 'default', className }) => {
+const Button = React.forwardRef(function Button(
+    { className, variant = 'default', size = 'default', children, ...props },
+    ref,
+) {
     const variants = {
-        default: 'bg-[#00e5ff]/10 text-[#00e5ff] border-[#00e5ff]/20',
-        secondary: 'bg-[#1e2129] text-[#f1f4f8] border-transparent',
-        outline: 'border-[#333742] text-[#f1f4f8] bg-[#14171f]/50'
-    };
-    return (
-        <div className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold", variants[variant], className)}>
-            {children}
-        </div>
-    );
-};
-
-const Button = ({ children, variant = 'default', size = 'default', className, disabled, ...props }) => {
-    const variants = {
-        default: 'bg-[#00e5ff] text-[#0b0e14] hover:bg-[#00e5ff]/90',
-        outline: 'border border-[#333742] bg-[#14171f]/50 hover:bg-[#1e2129] hover:text-[#f1f4f8] text-[#f1f4f8]',
-        ghost: 'hover:bg-[#1e2129] text-[#f1f4f8]',
+        default: 'bg-[#00e5ff] text-black hover:bg-[#00e5ff]/90',
+        outline: 'border border-[#333742] bg-transparent hover:bg-white/5',
+        ghost: 'bg-transparent hover:bg-white/5',
+        destructive: 'bg-red-600 text-white hover:bg-red-700',
     };
     const sizes = {
         default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3 text-xs',
-        lg: 'h-11 px-8',
+        sm: 'h-8 px-3 text-sm',
+        lg: 'h-12 px-6 text-base',
         icon: 'h-10 w-10',
     };
     return (
-        <button disabled={disabled} className={cn("inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer", variants[variant], sizes[size], className)} {...props}>
+        <button
+            ref={ref}
+            className={cn(
+                'inline-flex items-center justify-center rounded-full font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                variants[variant],
+                sizes[size],
+                className,
+            )}
+            {...props}
+        >
             {children}
         </button>
     );
-};
+});
 
-const Input = ({ className, ...props }) => (
-    <input className={cn("flex h-10 w-full rounded-xl border border-[#333742] bg-[#14171f]/50 px-3 py-2 text-sm text-[#f1f4f8] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]/50", className)} {...props} />
-);
-
-// --------------------------------------------------------------------------
-// Feature Components
-// --------------------------------------------------------------------------
-
-const SavedJobsDrawer = ({ isOpen, onClose, savedJobs, onSelectJob, onRemove, onClearAll }) => {
+function Badge({ className, children, ...props }) {
     return (
-        <AnimatePresence>
-            {isOpen && (
-                <>
-                    {/* Backdrop */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={onClose}
-                        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                    />
-
-                    {/* Sliding Panel */}
-                    <motion.div
-                        initial={{ x: '100%' }}
-                        animate={{ x: 0 }}
-                        exit={{ x: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[#333742] bg-[#0b0e14]/95 backdrop-blur-xl text-[#f1f4f8] shadow-2xl"
-                    >
-                        {/* Header */}
-                        <div className="flex items-center justify-between border-b border-[#333742] p-6">
-                            <div>
-                                <h2 className="text-xl font-bold text-[#f1f4f8]">Saved Roles</h2>
-                                <p className="text-xs text-[#94a3b8] mt-1">Review and apply to your top matches.</p>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full shrink-0">
-                                <X className="h-5 w-5" />
-                            </Button>
-                        </div>
-
-                        {/* List Body */}
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {savedJobs.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                    <Bookmark className="h-12 w-12 text-[#333742]" />
-                                    <div>
-                                        <p className="font-semibold text-[#f1f4f8]">No saved jobs yet</p>
-                                        <p className="text-sm text-[#94a3b8]">Click the bookmark icon on any job card to save it for later.</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {savedJobs.map((job) => (
-                                        <div key={job.id} className="group rounded-[1.2rem] border border-[#333742] bg-[#14171f] p-4 transition-all hover:border-[#00e5ff]/50 hover:shadow-lg hover:shadow-[#00e5ff]/10">
-                                            <div className="cursor-pointer" onClick={() => { onSelectJob(job); onClose(); }}>
-                                                <h4 className="font-semibold text-[#f1f4f8] leading-snug line-clamp-2 group-hover:text-[#00e5ff] transition-colors">{job.title}</h4>
-                                                <p className="text-sm text-[#94a3b8] mt-1 truncate">{job.company || 'Unknown Company'}</p>
-                                            </div>
-                                            <div className="mt-4 flex items-center justify-between">
-                                                <Badge variant="outline" className="text-[10px] max-w-[150px] truncate">
-                                                    {job.location || job.source || 'Remote'}
-                                                </Badge>
-                                                <Button variant="ghost" size="sm" onClick={() => onRemove(job.id)} className="h-8 text-red-400 hover:bg-red-500/10 hover:text-red-300">
-                                                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remove
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        {savedJobs.length > 0 && (
-                            <div className="border-t border-[#333742] p-6 bg-[#14171f]">
-                                <Button variant="outline" className="w-full text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300" onClick={onClearAll}>
-                                    Clear All Saved Jobs
-                                </Button>
-                            </div>
-                        )}
-                    </motion.div>
-                </>
+        <span
+            className={cn(
+                'inline-flex items-center rounded-full border border-[#333742] bg-white/5 px-2.5 py-0.5 text-xs font-medium',
+                className,
             )}
-        </AnimatePresence>
+            {...props}
+        >
+            {children}
+        </span>
     );
-};
-const COMPANY_LOGOS = {
-    Stripe: '/logos/stripe.png',
-    MongoDB: '/logos/mongodb.png',
-    Palantir: '/logos/palantir.png',
-    HubSpot: '/logos/hubspot.png',
-};
-
-function getCompanyInitials(company) {
-    if (!company) return '?';
-
-    return company
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((word) => word[0]?.toUpperCase())
-        .join('');
 }
 
-function getCompanyColor(company) {
-    const palettes = [
-        'from-cyan-500 to-blue-600',
-        'from-emerald-500 to-teal-600',
-        'from-violet-500 to-fuchsia-600',
-        'from-orange-500 to-red-600',
-        'from-sky-500 to-indigo-600',
-        'from-indigo-500 to-purple-600',
-    ];
-
-    const text = company || 'company';
-    let hash = 0;
-
-    for (let i = 0; i < text.length; i++) {
-        hash = text.charCodeAt(i) + ((hash << 5) - hash);
-    }
-
-    return palettes[Math.abs(hash) % palettes.length];
-}
-
-const CompanyLogo = ({ company, logoUrl, size = 'md' }) => {
-    const [imgFailed, setImgFailed] = useState(false);
-
-    const sizeClasses = {
-        sm: 'h-9 w-9 rounded-lg text-xs',
-        md: 'h-10 w-10 rounded-xl text-sm',
-        lg: 'h-12 w-12 rounded-xl text-base',
-    };
-
-    const classes = sizeClasses[size] || sizeClasses.md;
-
-    if (logoUrl && !imgFailed) {
+function MatchScorePill({ score, loading }) {
+    if (loading) {
         return (
-            <img
-                src={logoUrl}
-                alt={company || 'Company'}
-                className={`${classes} shrink-0 border border-[#333742] bg-[#0f172a] object-cover`}
-                onError={() => setImgFailed(true)}
-            />
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/50">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                scoring
+            </span>
         );
     }
-
+    if (score === null || score === undefined) return null;
+    const pct = typeof score === 'object'
+        ? Math.round(score.match_score ?? score.score ?? 0)
+        : Math.round(score);
+    const color =
+        pct >= 75 ? 'bg-emerald-400/15 border-emerald-400/30 text-emerald-300'
+            : pct >= 50 ? 'bg-amber-400/15 border-amber-400/30 text-amber-300'
+                : 'bg-white/5 border-white/10 text-white/60';
     return (
-        <div
-            className={`${classes} shrink-0 border border-[#333742] bg-gradient-to-br ${getCompanyColor(company)} flex items-center justify-center font-bold text-white`}
+        <span
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums',
+                color,
+            )}
+            title="Match score vs your resume"
         >
-            {getCompanyInitials(company)}
-        </div>
+            <Sparkles className="h-3 w-3" />
+            {pct}% match
+        </span>
     );
-};
-const JobCard = ({ job, saved, onToggleSaved, onOptimizeRole, resumeReady, onClick }) => {
-    const logoUrl = COMPANY_LOGOS[job.company] || job.company_logo_url || null;
-    const workTypeBadges = getWorkTypeBadges(job);
-    const experienceLabel = formatExperience(job);
-    const salaryLabel = formatSalary(job);
+}
 
-    const companyName =
-        job.company && job.company.toUpperCase() !== 'UNKNOWN'
-            ? job.company
-            : 'Unknown Company';
+/* -------------------------------------------------------------------------
+ *  Job card (grid view)
+ * ---------------------------------------------------------------------- */
 
+function JobCard({
+    job,
+    saved,
+    onToggleSaved,
+    onOptimizeRole,
+    resumeReady,
+    onClick,
+    matchScore,
+    matchScoreLoading,
+}) {
     return (
-        <div
-            onClick={() => onClick && onClick(job)}
-            className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-[1.8rem] border border-[#333742] bg-[#14171f]/90 p-5 shadow-lg transition-all hover:-translate-y-1 hover:border-[#00e5ff]/40 hover:shadow-[#00e5ff]/10"
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            whileHover={{ y: -4 }}
+            onClick={() => onClick(job)}
+            className="group cursor-pointer rounded-[1.75rem] border border-[#333742] bg-[#14171f]/70 p-5 backdrop-blur-sm transition-colors hover:border-[#00e5ff]/30"
         >
-            <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                        <CompanyLogo
-                            company={job.company}
-                            logoUrl={logoUrl}
-                            size="md"
-                        />
-
-                        <div className="min-w-0">
-                            <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">
-                                {companyName}
-                            </p>
-                        </div>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#94a3b8]">
+                        <span className="truncate">{job.source || 'Unknown'}</span>
+                        {job.remote && <span className="text-[#00e5ff]">• Remote</span>}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        {job.location ? (
-                            <Badge variant="outline" className="max-w-[140px] truncate">
-                                <MapPin className="mr-1 h-3 w-3" />
-                                {job.location}
-                            </Badge>
-                        ) : null}
-
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn("h-8 w-8 rounded-full", saved && "bg-emerald-500/20 text-emerald-400")}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onToggleSaved(job);
-                            }}
-                        >
-                            {saved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-                        </Button>
+                    <h3 className="mt-2 line-clamp-2 text-lg font-semibold text-white">
+                        {job.title}
+                    </h3>
+                    <div className="mt-1 text-sm text-[#94a3b8]">
+                        {job.company || 'Unknown company'}
                     </div>
                 </div>
-
-                <h3 className="text-lg font-semibold leading-snug line-clamp-2 text-[#f1f4f8] group-hover:text-[#00e5ff] transition-colors">
-                    {job.title}
-                </h3>
-
-                <div className="flex flex-wrap gap-2">
-                    {workTypeBadges.map((badge) => (
-                        <Badge key={badge} variant="outline">
-                            {badge}
-                        </Badge>
-                    ))}
-
-                    {experienceLabel ? (
-                        <Badge
-                            variant="default"
-                            className="bg-[#f5b301]/15 text-[#f5b301] border-[#f5b301]/20"
-                        >
-                            {experienceLabel}
-                        </Badge>
-                    ) : null}
-
-                    {salaryLabel ? (
-                        <Badge variant="outline">
-                            <DollarSign className="mr-1 h-3 w-3" />
-                            {salaryLabel}
-                        </Badge>
-                    ) : null}
-                </div>
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSaved(job);
+                    }}
+                    className="shrink-0 rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition-colors hover:border-white/20 hover:bg-white/10"
+                    aria-label={saved ? 'Unsave job' : 'Save job'}
+                >
+                    {saved ? <BookmarkCheck className="h-4 w-4 text-[#00e5ff]" /> : <Bookmark className="h-4 w-4" />}
+                </button>
             </div>
 
-            <div className="mt-6 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{getTimeAgo(job.posted_at || job.posted_date || job.created_at)}</span>
-                </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#94a3b8]">
+                {job.location && (
+                    <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {job.location}
+                    </span>
+                )}
+                {job.salary && (
+                    <span className="inline-flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        {job.salary}
+                    </span>
+                )}
+                <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {formatPosted(job.posted_date)}
+                </span>
+            </div>
 
-                <Button
-                    variant="outline"
-                    size="sm"
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <MatchScorePill score={matchScore} loading={matchScoreLoading} />
+                {job.employment_type && (
+                    <Badge className="text-[10px]">{job.employment_type}</Badge>
+                )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between">
+                <button
+                    type="button"
                     disabled={!resumeReady}
                     onClick={(e) => {
                         e.stopPropagation();
                         onOptimizeRole(job);
                     }}
-                    className="gap-1.5 border-[#00e5ff]/30 text-[#00e5ff] bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20"
+                    className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                        resumeReady
+                            ? 'border-[#00e5ff]/30 bg-[#00e5ff]/10 text-[#00e5ff] hover:bg-[#00e5ff]/15'
+                            : 'cursor-not-allowed border-white/5 bg-white/[0.02] text-white/30',
+                    )}
+                    title={resumeReady ? 'Optimize resume for this role' : 'Upload a resume first'}
                 >
-                    <WandSparkles className="h-3.5 w-3.5" /> Optimize
-                </Button>
+                    <WandSparkles className="h-3.5 w-3.5" />
+                    Optimize
+                </button>
+                <ExternalLink className="h-3.5 w-3.5 text-white/30 transition-colors group-hover:text-[#00e5ff]" />
             </div>
-        </div>
+        </motion.div>
     );
-};
-function decodeHtmlEntities(value) {
-    if (!value) return '';
-
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = value;
-    return textarea.value;
 }
 
-function getSafeDescriptionHtml(value) {
-    const decoded = decodeHtmlEntities(value || '');
-    return DOMPurify.sanitize(decoded);
-}
+/* -------------------------------------------------------------------------
+ *  Featured / recommended carousel
+ * ---------------------------------------------------------------------- */
 
-const JobDetailDialog = ({ open, onOpenChange, job, saved, onToggleSaved, onOptimizeRole, aiSummary, aiSummaryLoading, optimization, optimizationLoading, resumeReady }) => {
-    if (!open || !job) return null;
+function RecommendedCarousel({ jobs, isLoading, onJobClick, isJobSaved, onToggleSaved }) {
+    const [index, setIndex] = useState(0);
+
+    useEffect(() => {
+        if (!jobs.length || jobs.length <= 1) return;
+        const id = setInterval(() => setIndex((i) => (i + 1) % jobs.length), 7000);
+        return () => clearInterval(id);
+    }, [jobs.length]);
+
+    if (isLoading) {
+        return (
+            <div className="rounded-[2rem] border border-[#333742] bg-[#14171f]/50 p-12 text-center">
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#00e5ff]" />
+                <div className="mt-3 text-sm text-[#94a3b8]">Finding recommendations...</div>
+            </div>
+        );
+    }
+
+    if (!jobs.length) return null;
+
+    const job = jobs[index];
+    const saved = isJobSaved(job);
+
     return (
-        <AnimatePresence>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#333742] bg-[#14171f] text-[#f1f4f8] shadow-2xl">
-                    <div className="flex items-start justify-between border-b border-[#333742] p-6 bg-[#14171f]/95">
-                        <div>
-                            <h2 className="text-2xl font-bold leading-tight">{job.title}</h2>
-                            <div className="mt-2 flex items-center gap-3">
-                                <CompanyLogo
-                                    company={job.company}
-                                    logoUrl={COMPANY_LOGOS[job.company] || job.company_logo_url || null}
-                                    size="md"
-                                />
-                                <p className="text-[#94a3b8]">{job.company || 'Unknown Company'}</p>
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {job.location && <Badge variant="outline"><MapPin className="mr-1 h-3.5 w-3.5" />{job.location}</Badge>}
-                                {job.remote && <Badge variant="secondary">Remote</Badge>}
-                                {job.salary && <Badge variant="outline">{job.salary}</Badge>}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="icon" onClick={() => onToggleSaved(job)} className={cn("rounded-full transition-all", saved ? "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700" : "hover:border-[#00e5ff] hover:text-[#00e5ff]")}>
-                                {saved ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="rounded-full"><X className="h-5 w-5" /></Button>
-                        </div>
-                    </div>
+        <div className="overflow-hidden rounded-[2rem] border border-[#333742] bg-gradient-to-b from-white/[0.04] to-white/[0.01] shadow-[0_28px_90px_-40px_rgba(0,0,0,0.92)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+                <div className="flex items-center gap-3">
+                    <span className="h-2 w-2 rounded-full bg-[#00e5ff] shadow-[0_0_18px_rgba(0,229,255,0.75)]" />
+                    <span className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                        Featured for you
+                    </span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIndex((i) => (i - 1 + jobs.length) % jobs.length)}
+                        className="rounded-full border border-white/10 bg-white/5 p-1.5 text-white/60 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                        aria-label="Previous"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-xs tabular-nums text-white/45">
+                        {index + 1} / {jobs.length}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setIndex((i) => (i + 1) % jobs.length)}
+                        className="rounded-full border border-white/10 bg-white/5 p-1.5 text-white/60 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                        aria-label="Next"
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                        <div className="rounded-2xl border border-[#333742] bg-[#1e2129]/50 p-5 shadow-inner">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">AI Summary</h3>
-                            {aiSummaryLoading ? (
-                                <div className="mt-4 flex items-center gap-2 text-sm text-[#94a3b8]"><Loader2 className="h-4 w-4 animate-spin" /> Analyzing role...</div>
-                            ) : aiSummary ? (
-                                <div className="mt-3 space-y-3 text-sm">
-                                    <p className="text-[#f1f4f8] leading-relaxed">{aiSummary.summary_short}</p>
-                                    <ul className="space-y-2">
-                                        {(aiSummary.summary_bullets || []).map((b, i) => <li key={i} className="flex gap-2 text-[#94a3b8]"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#00e5ff]" />{b}</li>)}
-                                    </ul>
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={job.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]"
+                >
+                    <div>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                                    {job.source || 'Recommended'}
                                 </div>
-                            ) : <p className="mt-3 text-sm text-[#94a3b8]">Summary unavailable.</p>}
+                                <h3 className="mt-3 line-clamp-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
+                                    {job.title}
+                                </h3>
+                                <div className="mt-3 text-base font-medium text-white/72">
+                                    {job.company || 'Unknown company'}
+                                </div>
+                                <div className="mt-1 text-sm text-white/50">
+                                    {job.location || 'Location not listed'}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onToggleSaved(job); }}
+                                className={cn(
+                                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all',
+                                    saved
+                                        ? 'border-white/20 bg-white/[0.14] text-white'
+                                        : 'border-white/10 bg-white/[0.05] text-white/60 hover:border-white/20 hover:text-white',
+                                )}
+                                aria-label={saved ? 'Unsave' : 'Save'}
+                            >
+                                {saved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                            </button>
                         </div>
 
-                        {(optimization || optimizationLoading) && (
-                            <div className="rounded-2xl border border-[#00e5ff]/30 bg-[#00e5ff]/5 p-5">
-                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#00e5ff]">Resume Optimization</h3>
-                                {optimizationLoading ? (
-                                    <div className="mt-4 flex items-center gap-2 text-sm text-[#00e5ff]"><Loader2 className="h-4 w-4 animate-spin" /> Tailoring resume...</div>
-                                ) : optimization ? (
-                                    <div className="mt-3 space-y-3 text-sm">
-                                        <p className="leading-relaxed">{optimization.tailored_summary}</p>
-                                        <ul className="space-y-2">
-                                            {(optimization.rewritten_bullets || []).map((b, i) => <li key={i} className="flex gap-2 text-[#94a3b8]"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#00e5ff]" />{b}</li>)}
-                                        </ul>
-                                    </div>
-                                ) : null}
+                        {typeof job.recommendation_score === 'number' && (
+                            <div className="mt-4">
+                                <MatchScorePill score={job.recommendation_score} />
                             </div>
                         )}
 
-                        <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8] mb-3">Description</h3>
-                            <div
-                                className="prose prose-invert max-w-none text-sm leading-relaxed text-[#94a3b8]"
-                                dangerouslySetInnerHTML={{
-                                    __html: getSafeDescriptionHtml(job.description || '<p>No description available.</p>')
-                                }}
-                            />
-                        </div>
+                        {Array.isArray(job.recommendation_reasons) && job.recommendation_reasons.length > 0 && (
+                            <ul className="mt-5 space-y-2">
+                                {job.recommendation_reasons.slice(0, 3).map((r, i) => (
+                                    <li key={i} className="flex gap-3 text-sm leading-6 text-white/72">
+                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#00e5ff]/60" />
+                                        <span>{r}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={() => onJobClick(job)}
+                            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/[0.12]"
+                        >
+                            Open role
+                            <ArrowUpRight className="h-4 w-4" />
+                        </button>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-[#333742] bg-[#14171f] p-5">
-                        {/* Left Side: Apply Button (Now using the Outline/Secondary style) */}
-                        <div>
-                            {job.url && (
-                                <a
-                                    href={job.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#00e5ff]/30 px-4 py-2 text-sm font-medium text-[#00e5ff] transition-all hover:bg-[#00e5ff]/10"
-                                >
-                                    Apply <ExternalLink className="h-4 w-4" />
-                                </a>
+                    <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-5">
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                            Role details
+                        </div>
+                        <dl className="mt-4 space-y-3 text-sm">
+                            {job.salary && (
+                                <div className="flex justify-between gap-4">
+                                    <dt className="text-white/50">Compensation</dt>
+                                    <dd className="text-right text-white/80">{job.salary}</dd>
+                                </div>
                             )}
-                        </div>
-
-                        {/* Right Side: Close & Optimize Buttons */}
-                        <div className="flex items-center gap-3">
-                            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                                Close
-                            </Button>
-
-                            {/* Optimize Button (Now using the Solid/Primary style) */}
-                            <Button
-
-                                disabled={!resumeReady || optimizationLoading}
-                                onClick={() => onOptimizeRole(job)}
-                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border-0 bg-[#00e5ff] px-4 py-2 text-sm font-semibold text-[#0b0e14] shadow-lg shadow-[#00e5ff]/20 transition-all hover:scale-105 hover:bg-[#00e5ff]/90"
-                            >
-                                {optimizationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                                Optimize For This Role
-                            </Button>
-                        </div>
+                            {job.employment_type && (
+                                <div className="flex justify-between gap-4">
+                                    <dt className="text-white/50">Type</dt>
+                                    <dd className="text-right text-white/80">{job.employment_type}</dd>
+                                </div>
+                            )}
+                            {job.experience_level && (
+                                <div className="flex justify-between gap-4">
+                                    <dt className="text-white/50">Level</dt>
+                                    <dd className="text-right text-white/80">{job.experience_level}</dd>
+                                </div>
+                            )}
+                            <div className="flex justify-between gap-4">
+                                <dt className="text-white/50">Posted</dt>
+                                <dd className="text-right text-white/80">{formatPosted(job.posted_date)}</dd>
+                            </div>
+                        </dl>
                     </div>
                 </motion.div>
-            </motion.div>
-        </AnimatePresence>
+            </AnimatePresence>
+        </div>
     );
-};
+}
 
-const ResumeLabPanel = ({ resumeFileName, resumeText, critiqueLevel, onCritiqueLevelChange, onUpload, onClear, onAnalyze, isExtracting, isAnalyzing, analysis, error }) => {
-    const ready = !!resumeText.trim();
+/* -------------------------------------------------------------------------
+ *  Mobile swipe card stack
+ * ---------------------------------------------------------------------- */
+
+function SwipeCard({ job, saved, onOpen, onToggleSaved }) {
     return (
-        <div className="flex h-full flex-col rounded-[2rem] border border-[#333742] bg-[#14171f]/80 p-6 shadow-xl backdrop-blur-md">
-            <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Resume Lab</p>
-                <h3 className="mt-1 text-xl font-bold text-[#f1f4f8]">AI Optimization</h3>
-                <p className="text-xs text-[#94a3b8] mt-1">Upload a resume to analyze strengths and tailor it to jobs.</p>
-            </div>
-
-            <div className="mt-6 space-y-4">
-                <label className="block cursor-pointer">
-                    <span className="mb-2 block text-xs font-medium uppercase text-[#94a3b8]">Upload Document</span>
-                    <Input type="file" accept=".pdf,.docx,.txt" className="cursor-pointer" onChange={(e) => { if (e.target.files?.[0]) onUpload(e.target.files[0]); }} disabled={isExtracting} />
-                </label>
-
-                <div className="rounded-xl border border-[#333742] bg-[#1e2129]/50 p-4">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-[#94a3b8]">Current File</span>
-                        {resumeFileName && <Button variant="ghost" size="sm" onClick={onClear} className="h-6 px-2 text-xs"><Trash2 className="mr-1 h-3 w-3" /> Clear</Button>}
+        <div
+            onClick={onOpen}
+            className="h-full w-full cursor-pointer rounded-[2rem] border border-white/10 bg-gradient-to-b from-white/[0.09] to-white/[0.02] p-6 shadow-2xl shadow-black/50 backdrop-blur-sm"
+        >
+            <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-[11px] uppercase tracking-wider text-white/50">
+                            {job.source || 'Unknown'}
+                        </div>
+                        <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-white">
+                            {job.title}
+                        </h3>
+                        <div className="mt-1 text-sm text-white/70">
+                            {job.company || 'Unknown company'}
+                        </div>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-sm font-medium text-[#f1f4f8]">
-                        <FileText className="h-4 w-4 text-[#00e5ff]" />
-                        <span className="truncate">{resumeFileName || 'None loaded'}</span>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onToggleSaved(); }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="rounded-full border border-white/10 bg-white/5 p-2 text-white/70"
+                    >
+                        {saved ? <BookmarkCheck className="h-4 w-4 text-[#00e5ff]" /> : <Bookmark className="h-4 w-4" />}
+                    </button>
                 </div>
 
-                <div>
-                    <span className="mb-2 block text-xs font-medium uppercase text-[#94a3b8]">Critique Level</span>
-                    <div className="relative">
-                        <select value={critiqueLevel} onChange={(e) => onCritiqueLevelChange(e.target.value)} className="w-full appearance-none cursor-pointer rounded-xl border border-[#333742] bg-[#1e2129]/50 p-2.5 text-sm text-[#f1f4f8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]/50">
-                            <option value="light">Light</option>
-                            <option value="balanced">Balanced</option>
-                            <option value="hardcore">Hardcore</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#94a3b8] pointer-events-none" />
-                    </div>
+                <div className="mt-5 space-y-2 text-sm text-white/72">
+                    {job.location && (
+                        <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-white/40" />
+                            {job.location}
+                        </div>
+                    )}
+                    {job.salary && (
+                        <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-white/40" />
+                            {job.salary}
+                        </div>
+                    )}
                 </div>
 
-                <Button className="w-full shadow-lg shadow-[#00e5ff]/20" disabled={!ready || isAnalyzing || isExtracting} onClick={onAnalyze}>
-                    {isAnalyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</> : <><WandSparkles className="mr-2 h-4 w-4" /> Analyze Resume</>}
-                </Button>
-                {error && <div className="rounded-lg bg-red-500/10 p-3 text-xs text-red-400 border border-red-500/20">{error}</div>}
-            </div>
-
-            <div className="mt-6 flex-1 overflow-auto rounded-xl border border-[#333742] bg-[#1e2129]/30 p-4 shadow-inner">
-                {!analysis ? (
-                    <p className="text-xs text-[#94a3b8] leading-relaxed">Run an analysis to get your baseline score, strengths, and actionable feedback before applying.</p>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-[#f1f4f8]">Overall Score</span>
-                            <Badge className="bg-[#00e5ff] text-[#0b0e14]">{analysis.score}/100</Badge>
-                        </div>
-                        <p className="text-xs text-[#94a3b8]">{analysis.headline}</p>
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase text-[#94a3b8] mb-1">Top Strengths</p>
-                            <ul className="text-xs space-y-1.5 text-[#f1f4f8]">{(analysis.strengths || []).map((s, i) => <li key={i}>• {s}</li>)}</ul>
-                        </div>
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase text-[#94a3b8] mb-1">Priority Actions</p>
-                            <ul className="text-xs space-y-1.5 text-[#f1f4f8]">{(analysis.priority_actions || []).map((a, i) => <li key={i}>• {a}</li>)}</ul>
-                        </div>
-                    </div>
-                )}
+                <div className="mt-auto flex items-center justify-between pt-6 text-xs text-white/50">
+                    <span>{formatPosted(job.posted_date)}</span>
+                    <span className="flex items-center gap-4">
+                        <X className="h-5 w-5 text-red-400/60" />
+                        <Heart className="h-5 w-5 text-[#00e5ff]/80" />
+                    </span>
+                </div>
             </div>
         </div>
     );
-};
+}
 
-const FilterBar = ({ filters, setFilters }) => {
-    const [localQ, setLocalQ] = useState(filters.q);
-    const debouncedQ = useDebounce(localQ, 400);
+function JobCardStack({
+    jobs,
+    index,
+    onAdvance,
+    onSave,
+    onToggleSaved,
+    onDismiss,
+    onDetails,
+    isJobSaved,
+    isFetchingNextPage,
+}) {
+    const x = useMotionValue(0);
+    const rotate = useTransform(x, [-200, 0, 200], [-18, 0, 18]);
+    const opacity = useTransform(x, [-200, 0, 200], [0.6, 1, 0.6]);
+    const flying = useRef(false);
 
-    useEffect(() => {
-        setLocalQ(filters.q || '');
-    }, [filters.q]);
+    const current = jobs[index] ?? null;
+    const next = jobs[index + 1] ?? null;
 
-    useEffect(() => {
-        setFilters(prev => {
-            if (prev.q === debouncedQ) return prev;
-            return { ...prev, q: debouncedQ };
-        });
-    }, [debouncedQ, setFilters]);
+    const finish = useCallback(
+        async (direction) => {
+            if (flying.current || !current) return;
+            flying.current = true;
+            const target = direction === 'right' ? 500 : -500;
+            await Promise.all([
+                animate(x, target, { duration: 0.22, ease: 'easeOut' }),
+                animate(opacity, 0, { duration: 0.22, ease: 'easeOut' }),
+            ]);
+            if (direction === 'right') onSave(current);
+            else onDismiss(current);
+            onAdvance();
+            // reset for next card
+            x.set(0);
+            opacity.set(1);
+            flying.current = false;
+        },
+        [current, onAdvance, onDismiss, onSave, opacity, x],
+    );
+
+    const handleDragEnd = (_, info) => {
+        if (!current) return;
+        if (info.offset.x > 80 || info.velocity.x > 500) {
+            void finish('right');
+        } else if (info.offset.x < -80 || info.velocity.x < -500) {
+            void finish('left');
+        }
+    };
+
+    if (!current) {
+        if (isFetchingNextPage) {
+            return (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Loader2 className="mb-3 h-6 w-6 animate-spin text-[#94a3b8]" />
+                    <div className="text-sm text-[#94a3b8]">Loading more jobs...</div>
+                </div>
+            );
+        }
+        return (
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border border-[#333742] bg-[#14171f]/50 py-16 text-center">
+                <Bookmark className="mb-4 h-12 w-12 text-[#94a3b8]/50" />
+                <div className="text-xl font-semibold text-white">No more jobs</div>
+                <div className="mt-2 max-w-xs text-sm text-[#94a3b8]">
+                    Try changing filters or check back later.
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col gap-4 rounded-[1.8rem] border border-[#333742] bg-[#14171f]/80 p-5 shadow-lg backdrop-blur-md lg:flex-row lg:items-center">
-            <div className="relative flex-1 group">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#00e5ff] transition-colors" />
-                <Input
-                    placeholder="Search roles, skills, or companies..."
-                    value={localQ}
-                    onChange={(e) => setLocalQ(e.target.value)}
-                    className="pl-9"
-                />
-            </div>
+        <div className="mx-auto w-full max-w-[22rem]">
+            <div className="relative h-[480px]">
+                {next && (
+                    <div className="absolute inset-0 translate-y-2 scale-[0.985] opacity-70">
+                        <SwipeCard
+                            job={next}
+                            saved={isJobSaved(next)}
+                            onOpen={() => onDetails(next)}
+                            onToggleSaved={() => onToggleSaved(next)}
+                        />
+                    </div>
+                )}
 
-            <div className="relative w-full lg:w-48 group">
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#00e5ff] transition-colors" />
-                <Input
-                    placeholder="Location"
-                    value={filters.location}
-                    onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                    className="pl-9"
-                />
-            </div>
-
-
-            <Button
-                variant={filters.remote ? "default" : "outline"}
-                onClick={() => setFilters(prev => ({ ...prev, remote: !prev.remote }))}
-                className="w-full lg:w-auto shrink-0"
-            >
-                Remote Only
-            </Button>
-
-            {(filters.q || filters.location || filters.source || filters.remote) && (
-                <Button
-                    variant="ghost"
-                    onClick={() => {
-                        setLocalQ('');
-                        setFilters({ q: '', location: '', source: '', remote: false });
-                    }}
+                <motion.div
+                    key={current.id}
+                    className="absolute inset-0"
+                    style={{ x, rotate, opacity, touchAction: 'none' }}
+                    drag="x"
+                    dragElastic={0.15}
+                    onDragEnd={handleDragEnd}
                 >
-                    Clear
-                </Button>
+                    <SwipeCard
+                        job={current}
+                        saved={isJobSaved(current)}
+                        onOpen={() => onDetails(current)}
+                        onToggleSaved={() => onToggleSaved(current)}
+                    />
+                </motion.div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-center gap-6">
+                <button
+                    type="button"
+                    onClick={() => finish('left')}
+                    className="flex h-14 w-14 items-center justify-center rounded-full border border-red-400/30 bg-red-400/10 text-red-300 transition-colors hover:bg-red-400/20"
+                    aria-label="Dismiss"
+                >
+                    <X className="h-6 w-6" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => finish('right')}
+                    className="flex h-14 w-14 items-center justify-center rounded-full border border-[#00e5ff]/30 bg-[#00e5ff]/10 text-[#00e5ff] transition-colors hover:bg-[#00e5ff]/20"
+                    aria-label="Save"
+                >
+                    <Heart className="h-6 w-6" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------
+ *  Detail dialog
+ * ---------------------------------------------------------------------- */
+
+function JobDetailDialog({
+    open,
+    onOpenChange,
+    job,
+    saved,
+    onToggleSaved,
+    onOptimizeRole,
+    resumeReady,
+    matchScore,
+    matchScoreLoading,
+    aiSummary,
+    aiSummaryLoading,
+    optimization,
+    optimizationLoading,
+}) {
+    const cleanDescription = useMemo(() => {
+        if (!job?.description) return '';
+        return DOMPurify.sanitize(job.description);
+    }, [job]);
+
+    if (!open || !job) return null;
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+            onClick={() => onOpenChange(false)}
+        >
+            <div
+                className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[2rem] border border-[#333742] bg-[#0b0e14] shadow-2xl sm:rounded-[2rem]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#333742] bg-[#0b0e14]/95 p-6 backdrop-blur">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[11px] uppercase tracking-wider text-[#94a3b8]">
+                            {job.source}
+                        </div>
+                        <h2 className="mt-2 text-2xl font-semibold text-white">{job.title}</h2>
+                        <div className="mt-1 text-sm text-[#94a3b8]">
+                            {job.company} {job.location && `• ${job.location}`}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <MatchScorePill score={matchScore} loading={matchScoreLoading} />
+                            {job.employment_type && <Badge>{job.employment_type}</Badge>}
+                            {job.remote && <Badge className="border-[#00e5ff]/30 text-[#00e5ff]">Remote</Badge>}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => onOpenChange(false)}
+                        className="rounded-full border border-white/10 p-2 text-white/60 hover:bg-white/5"
+                        aria-label="Close"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto p-6">
+                    {aiSummaryLoading && (
+                        <div className="mb-5 flex items-center gap-2 text-sm text-[#94a3b8]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Generating AI summary...
+                        </div>
+                    )}
+                    {aiSummary && (
+                        <div className="mb-6 rounded-[1.25rem] border border-[#00e5ff]/20 bg-[#00e5ff]/5 p-5">
+                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#00e5ff]">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                AI Summary
+                            </div>
+                            {aiSummary.summary_short && (
+                                <div className="text-sm leading-6 text-white/85">
+                                    {aiSummary.summary_short}
+                                </div>
+                            )}
+                            {Array.isArray(aiSummary.summary_bullets) && aiSummary.summary_bullets.length > 0 && (
+                                <ul className="mt-3 space-y-2">
+                                    {aiSummary.summary_bullets.map((bullet, i) => (
+                                        <li key={i} className="flex gap-2 text-sm leading-6 text-white/75">
+                                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#00e5ff]/60" />
+                                            <span>{bullet}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {Array.isArray(aiSummary.attention_tags) && aiSummary.attention_tags.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    {aiSummary.attention_tags.map((tag) => (
+                                        <span
+                                            key={tag}
+                                            className="inline-flex items-center rounded-full border border-[#00e5ff]/30 bg-[#00e5ff]/10 px-2 py-0.5 text-[10px] font-medium text-[#00e5ff]"
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {optimizationLoading && (
+                        <div className="mb-5 flex items-center gap-2 text-sm text-[#94a3b8]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Optimizing your resume for this role...
+                        </div>
+                    )}
+                    {optimization && (
+                        <div className="mb-6 rounded-[1.25rem] border border-purple-400/20 bg-purple-400/5 p-5">
+                            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-purple-300">
+                                <WandSparkles className="h-3.5 w-3.5" />
+                                Resume Optimization
+                            </div>
+                            {typeof optimization === 'string' ? (
+                                <div className="text-sm leading-6 text-white/85">{optimization}</div>
+                            ) : Array.isArray(optimization.suggestions) ? (
+                                <div className="space-y-4">
+                                    <div className="text-xs text-white/60">
+                                        {optimization.suggestions.length} bullet{optimization.suggestions.length !== 1 ? 's' : ''} rewritten for this role
+                                    </div>
+                                    {optimization.suggestions.map((s, i) => (
+                                        <div
+                                            key={i}
+                                            className="rounded-[1rem] border border-white/5 bg-black/20 p-4"
+                                        >
+                                            <div className="mb-3 flex items-center gap-2">
+                                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-400/20 text-[10px] font-semibold text-purple-300">
+                                                    {i + 1}
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                                                        Original
+                                                    </div>
+                                                    <div className="text-sm leading-6 text-white/55 line-through decoration-white/20">
+                                                        {s.original}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">
+                                                        Improved
+                                                    </div>
+                                                    <div className="text-sm leading-6 text-white/90">
+                                                        {s.improved}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(s.improved);
+                                                        }}
+                                                        className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/60 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/10 hover:text-emerald-200"
+                                                    >
+                                                        Copy improved
+                                                    </button>
+                                                </div>
+
+                                                {s.reason && (
+                                                    <div className="rounded-[0.75rem] border border-purple-400/10 bg-purple-400/5 p-3">
+                                                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-purple-300/80">
+                                                            Why
+                                                        </div>
+                                                        <div className="text-xs leading-5 text-white/70">
+                                                            {s.reason}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <pre className="whitespace-pre-wrap text-sm leading-6 text-white/85 font-sans">
+                                    {JSON.stringify(optimization, null, 2)}
+                                </pre>
+                            )}
+                        </div>
+                    )}
+
+                    <div
+                        className="prose prose-invert max-w-none prose-sm prose-headings:text-white prose-p:text-white/80 prose-li:text-white/80"
+                        dangerouslySetInnerHTML={{ __html: cleanDescription }}
+                    />
+                </div>
+
+                <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-[#333742] bg-[#0b0e14]/95 p-4 backdrop-blur">
+                    <Button
+                        variant="outline"
+                        onClick={() => onToggleSaved(job)}
+                    >
+                        {saved ? (
+                            <>
+                                <BookmarkCheck className="mr-2 h-4 w-4 text-[#00e5ff]" />
+                                Saved
+                            </>
+                        ) : (
+                            <>
+                                <Bookmark className="mr-2 h-4 w-4" />
+                                Save
+                            </>
+                        )}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        disabled={!resumeReady}
+                        onClick={() => onOptimizeRole(job)}
+                    >
+                        <WandSparkles className="mr-2 h-4 w-4" />
+                        Optimize for role
+                    </Button>
+                    {job.url && (
+                        <Button
+                            onClick={() => window.open(job.url, '_blank', 'noopener,noreferrer')}
+                        >
+                            Apply
+                            <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------
+ *  Saved jobs drawer
+ * ---------------------------------------------------------------------- */
+
+function SavedJobsDrawer({ isOpen, onClose, savedJobs, onSelectJob, onRemove, onClearAll }) {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div
+                className="flex h-full w-full max-w-md flex-col border-l border-[#333742] bg-[#0b0e14] shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between border-b border-[#333742] p-5">
+                    <div>
+                        <h3 className="text-lg font-semibold text-white">Saved jobs</h3>
+                        <div className="text-xs text-[#94a3b8]">{savedJobs.length} saved</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {savedJobs.length > 0 && (
+                            <Button variant="ghost" size="sm" onClick={onClearAll}>
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                Clear all
+                            </Button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-full p-1.5 text-white/60 hover:bg-white/5"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                    {savedJobs.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                            <Bookmark className="mb-3 h-10 w-10 text-[#94a3b8]/40" />
+                            <div className="text-sm text-[#94a3b8]">No saved jobs yet</div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {savedJobs.map((job) => (
+                                <div
+                                    key={job.id}
+                                    className="group flex items-start justify-between gap-3 rounded-[1.25rem] border border-[#333742] bg-white/[0.02] p-4 transition-colors hover:border-[#00e5ff]/30"
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectJob(job)}
+                                        className="min-w-0 flex-1 text-left"
+                                    >
+                                        <div className="line-clamp-1 text-sm font-semibold text-white">
+                                            {job.title}
+                                        </div>
+                                        <div className="mt-0.5 line-clamp-1 text-xs text-[#94a3b8]">
+                                            {job.company}
+                                        </div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onRemove(job)}
+                                        className="shrink-0 rounded-full p-1.5 text-white/40 hover:bg-white/5 hover:text-red-400"
+                                        aria-label="Remove"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------
+ *  Resume Lab side panel
+ * ---------------------------------------------------------------------- */
+
+function ResumeLabPanel({
+    resumeFileName,
+    matchProfile,
+    onUpload,
+    onClear,
+    onAnalyze,
+    isUploading,
+    isAnalyzing,
+    analysis,
+    error,
+}) {
+    const fileRef = useRef(null);
+
+    return (
+        <div className="space-y-4 rounded-[2rem] border border-[#333742] bg-[#14171f]/60 p-5 backdrop-blur">
+            <div className="flex items-center gap-2">
+                <Compass className="h-4 w-4 text-[#00e5ff]" />
+                <h3 className="text-sm font-semibold text-white">Resume Lab</h3>
+            </div>
+
+            {!resumeFileName ? (
+                <>
+                    <p className="text-xs leading-5 text-[#94a3b8]">
+                        Upload a resume to unlock per-job match scores, AI summaries, and role optimization.
+                    </p>
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) onUpload(f);
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        disabled={isUploading}
+                        onClick={() => fileRef.current?.click()}
+                        className="w-full"
+                    >
+                        {isUploading ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Uploading...
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Upload PDF
+                            </>
+                        )}
+                    </Button>
+                </>
+            ) : (
+                <>
+                    <div className="rounded-[1.25rem] border border-[#00e5ff]/20 bg-[#00e5ff]/5 p-3">
+                        <div className="flex items-start gap-2">
+                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#00e5ff]" />
+                            <div className="min-w-0">
+                                <div className="truncate text-xs font-semibold text-white">
+                                    {resumeFileName}
+                                </div>
+                                {matchProfile?.skills_extracted && (
+                                    <div className="mt-1 text-[11px] text-[#94a3b8]">
+                                        {matchProfile.skills?.length || 0} skills detected
+                                        {matchProfile.experience_years !== null &&
+                                            ` • ${matchProfile.experience_years}y exp`}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={onAnalyze} disabled={isAnalyzing} className="flex-1">
+                            {isAnalyzing ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Analyze
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={onClear}>
+                            Clear
+                        </Button>
+                    </div>
+
+                    {analysis && (
+                        <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3 text-xs">
+                            {typeof analysis.score === 'number' && (
+                                <div className="mb-2">
+                                    <div className="text-[10px] uppercase tracking-wider text-[#94a3b8]">Score</div>
+                                    <div className="text-2xl font-semibold text-[#00e5ff]">{analysis.score}</div>
+                                </div>
+                            )}
+                            {analysis.headline && (
+                                <div className="text-white/80">{analysis.headline}</div>
+                            )}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {error && (
+                <div className="rounded-[1.25rem] border border-red-400/30 bg-red-400/10 p-3 text-xs text-red-200">
+                    {error}
+                </div>
             )}
         </div>
     );
-};
+}
 
-// --------------------------------------------------------------------------
-// Main Page Layout
-// --------------------------------------------------------------------------
+/* -------------------------------------------------------------------------
+ *  Main page
+ * ---------------------------------------------------------------------- */
 
 function JobsPage() {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const isMobile = useMediaQuery('(max-width: 639px)');
 
-    const [filters, setFilters] = useState({
-        q: searchParams.get('q') || '',
-        location: '',
-        source: '',
-        remote: false
-    });
+    // Filters (URL-synced)
+    const q = searchParams.get('q') || '';
+    const location = searchParams.get('location') || '';
+    const source = searchParams.get('source') || '';
+    const remote = searchParams.get('remote') === 'true';
 
+    const updateParam = (key, value) => {
+        const next = new URLSearchParams(searchParams);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        setSearchParams(next, { replace: true });
+    };
+
+    // High-contrast toggle
+    const [highContrast, setHighContrast] = useState(getInitialContrast);
     useEffect(() => {
-        const q = searchParams.get('q') || '';
+        localStorage.setItem(CONTRAST_STORAGE_KEY, String(highContrast));
+    }, [highContrast]);
 
-        setFilters(prev => {
-            if (prev.q === q) return prev;
-            return { ...prev, q };
-        });
-    }, [searchParams]);
+    // Guest user id
+    const guestUserId = useMemo(getOrCreateGuestUserId, []);
 
-    const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useJobsList(filters);
-    const jobs = useMemo(() => {
-        const allJobs = data?.pages.flatMap((p) => p.data) || [];
-
-        return [...allJobs].sort((a, b) => {
-            const aDate = new Date(a.posted_at || a.posted_date || a.created_at || 0).getTime();
-            const bDate = new Date(b.posted_at || b.posted_date || b.created_at || 0).getTime();
-
-            return bDate - aDate;
-        });
-    }, [data]);
-
-    const { savedJobs, isJobSaved, toggleSaved, unsaveJob, clearAll } = useSavedJobs();
-
-    const [selectedJob, setSelectedJob] = useState(null);
-    const [detailOpen, setDetailOpen] = useState(false);
-    const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false); // <--- Drawer State
-
-    const [guestResume, setGuestResume] = useState({ fileName: null, text: '' });
-    const [critiqueLevel, setCritiqueLevel] = useState('balanced');
+    // Resume state
+    const [resumeFile, setResumeFile] = useState({ fileName: null });
+    const [matchProfile, setMatchProfile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [resumeAnalysis, setResumeAnalysis] = useState(null);
     const [resumeError, setResumeError] = useState(null);
-    const [isExtracting, setIsExtracting] = useState(false);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-    const [jobSummaryById, setJobSummaryById] = useState({});
+    const resumeReady = Boolean(resumeFile.fileName);
+
+    // Saved jobs
+    const { savedJobs, isJobSaved, toggleSaved, unsaveJob, clearAll } = useSavedJobs();
+    const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
+
+    // Job detail
+    const [selectedJob, setSelectedJob] = useState(null);
+    const [detailOpen, setDetailOpen] = useState(false);
+
+    // Per-job AI / match state
+    const [matchById, setMatchById] = useState({});
+    const [matchLoadingById, setMatchLoadingById] = useState({});
+    const [summaryById, setSummaryById] = useState({});
     const [summaryLoadingById, setSummaryLoadingById] = useState({});
-    const [jobOptimizationById, setJobOptimizationById] = useState({});
+    const [optimizationById, setOptimizationById] = useState({});
     const [optimizationLoadingById, setOptimizationLoadingById] = useState({});
 
-    const resumeReady = !!guestResume.text.trim();
+    // Swipe index (mobile)
+    const [swipeIndex, setSwipeIndex] = useState(0);
 
-    const handleDetails = async (job) => {
-        setSelectedJob(job);
-        setDetailOpen(true);
-        if (!jobSummaryById[job.id] && !summaryLoadingById[job.id]) {
-            setSummaryLoadingById(p => ({ ...p, [job.id]: true }));
+    /* ---- main jobs feed (cursor-based infinite scroll) ---- */
+    const jobsQuery = useInfiniteQuery({
+        queryKey: ['jobs', { q, location, source, remote }],
+        queryFn: ({ pageParam = null }) =>
+            api.jobs.list({ pageParam, q, location, source, remote }),
+        getNextPageParam: (last) => last.next_cursor || null,
+        initialPageParam: null,
+    });
+
+    const jobs = useMemo(() => {
+        const flat = jobsQuery.data?.pages.flatMap((p) => p.items) ?? [];
+        return [...flat].sort((a, b) => {
+            const aDate = new Date(a.posted_date || a.created_at || 0).getTime();
+            const bDate = new Date(b.posted_date || b.created_at || 0).getTime();
+            return bDate - aDate;
+        });
+    }, [jobsQuery.data]);
+    /* ---- recommended carousel ---- */
+    const recommendedQuery = useQuery({
+        queryKey: ['recommended', matchProfile?.skills, matchProfile?.experience_years],
+        queryFn: () =>
+            api.jobs.recommended({
+                skills: matchProfile?.skills,
+                experienceYears: matchProfile?.experience_years,
+                userId: guestUserId,
+            }),
+        enabled: true,
+        staleTime: 5 * 60 * 1000,
+    });
+    const recommendedJobs = recommendedQuery.data?.items ?? [];
+
+    /* ---- actions ---- */
+
+    const handleUpload = async (file) => {
+        setResumeError(null);
+        setIsUploading(true);
+        try {
+            const result = await api.resume.upload(guestUserId, file);
+            setResumeFile({ fileName: result.filename || file.name });
+            // Pull match profile
             try {
-                const sum = await api.ai.summary(job.id);
-                setJobSummaryById(p => ({ ...p, [job.id]: sum }));
-            } catch (e) { } finally {
-                setSummaryLoadingById(p => ({ ...p, [job.id]: false }));
+                const profile = await api.resume.matchProfile(guestUserId);
+                setMatchProfile(profile);
+            } catch {
+                // Non-fatal; resume uploaded but no profile
             }
+            setMatchById({});
+            setOptimizationById({});
+            setResumeAnalysis(null);
+        } catch (err) {
+            setResumeError(err.message || 'Upload failed');
+        } finally {
+            setIsUploading(false);
         }
     };
 
-    const handleUpload = async (file) => {
-        setIsExtracting(true);
+    const handleClearResume = () => {
+        setResumeFile({ fileName: null });
+        setMatchProfile(null);
+        setResumeAnalysis(null);
+        setMatchById({});
+        setOptimizationById({});
         setResumeError(null);
-        try {
-            const res = await api.ai.extractResume(file);
-            setGuestResume({ fileName: file.name, text: res.text || '' });
-        } catch (e) {
-            setResumeError('Failed to extract text from file.');
-        } finally {
-            setIsExtracting(false);
-        }
     };
 
     const handleAnalyze = async () => {
-        if (!resumeReady) return;
-        setIsAnalyzing(true);
         setResumeError(null);
+        setIsAnalyzing(true);
         try {
-            const res = await api.ai.analyzeResume(guestResume.text, critiqueLevel);
-            setResumeAnalysis(res);
-        } catch (e) {
-            setResumeError('Analysis failed.');
+            const result = await api.resume.analyze(guestUserId, 'balanced');
+            setResumeAnalysis(result);
+        } catch (err) {
+            setResumeError(err.message || 'Analysis failed');
         } finally {
             setIsAnalyzing(false);
         }
     };
 
-    const handleOptimize = async (job) => {
-        if (!resumeReady) return;
-        setOptimizationLoadingById(p => ({ ...p, [job.id]: true }));
-        try {
-            const res = await api.ai.optimizeResumeForJob(job.id, guestResume.text, critiqueLevel);
-            setJobOptimizationById(p => ({ ...p, [job.id]: res }));
-            handleDetails(job);
-        } catch (e) { } finally {
-            setOptimizationLoadingById(p => ({ ...p, [job.id]: false }));
+    const ensureMatchScore = useCallback(
+        async (job) => {
+            if (!matchProfile?.skills_extracted) return;
+            if (matchById[job.id] || matchLoadingById[job.id]) return;
+            setMatchLoadingById((p) => ({ ...p, [job.id]: true }));
+            try {
+                const score = await api.jobs.matchScore(
+                    job.id,
+                    matchProfile.skills,
+                    matchProfile.experience_years,
+                );
+                setMatchById((p) => ({ ...p, [job.id]: score }));
+            } catch {
+                // Non-fatal
+            } finally {
+                setMatchLoadingById((p) => ({ ...p, [job.id]: false }));
+            }
+        },
+        [matchProfile, matchById, matchLoadingById],
+    );
+
+    // Score visible jobs lazily
+    useEffect(() => {
+        if (!matchProfile?.skills_extracted) return;
+        jobs.slice(0, 24).forEach((job) => {
+            void ensureMatchScore(job);
+        });
+    }, [jobs, matchProfile, ensureMatchScore]);
+
+    const handleDetails = async (job) => {
+        setSelectedJob(job);
+        setDetailOpen(true);
+        void ensureMatchScore(job);
+        if (!summaryById[job.id] && !summaryLoadingById[job.id]) {
+            setSummaryLoadingById((p) => ({ ...p, [job.id]: true }));
+            try {
+                const s = await api.jobs.summary(job.id);
+                setSummaryById((p) => ({ ...p, [job.id]: s }));
+            } catch {
+                // ignore
+            } finally {
+                setSummaryLoadingById((p) => ({ ...p, [job.id]: false }));
+            }
         }
     };
 
+    const handleOptimize = async (job) => {
+        if (!resumeReady) return;
+        setOptimizationLoadingById((p) => ({ ...p, [job.id]: true }));
+        try {
+            const r = await api.resume.optimize(job.id, guestUserId, 'bullets');
+            setOptimizationById((p) => ({ ...p, [job.id]: r }));
+            if (!detailOpen || selectedJob?.id !== job.id) {
+                setSelectedJob(job);
+                setDetailOpen(true);
+            }
+        } catch (err) {
+            setResumeError(err.message || 'Optimization failed');
+        } finally {
+            setOptimizationLoadingById((p) => ({ ...p, [job.id]: false }));
+        }
+    };
+
+    /* ---- render ---- */
+
     return (
-        <div className="pb-12 font-sans selection:bg-[#00e5ff]/20">
-            <div className="mx-auto w-full max-w-[1800px] px-4 py-8 lg:px-8">
+        <div
+            className={cn(
+                'min-h-screen text-white',
+                highContrast
+                    ? 'bg-black'
+                    : 'bg-gradient-to-b from-[#0a0d14] via-[#0a0d14] to-[#050709]',
+            )}
+        >
+            {/* Header */}
+            <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#0a0d14]/85 backdrop-blur-xl">
+                <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
+                    <div className="flex items-center gap-3">
+                        <Briefcase className="h-5 w-5 text-[#00e5ff]" />
+                        <span className="text-sm font-semibold">Job Board</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setHighContrast((v) => !v)}
+                            title="Toggle high contrast"
+                        >
+                            {highContrast ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsSavedDrawerOpen(true)}>
+                            <Bookmark className="mr-1.5 h-3.5 w-3.5" />
+                            Saved
+                            {savedJobs.length > 0 && (
+                                <span className="ml-1.5 rounded-full bg-[#00e5ff]/20 px-1.5 text-[10px] text-[#00e5ff]">
+                                    {savedJobs.length}
+                                </span>
+                            )}
+                        </Button>
+                    </div>
+                </div>
+            </header>
 
-                {/* Header Block */}
-                <header className="mb-8 rounded-[2rem] border border-[#333742] bg-[#14171f]/80 p-6 shadow-xl backdrop-blur-md lg:p-10">
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
+                {/* Hero */}
+                <section className="mb-8 rounded-[2rem] border border-white/10 bg-gradient-to-b from-white/[0.05] to-white/[0.01] p-6 backdrop-blur sm:p-8">
+                    <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
                         <div>
-                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00e5ff]">Job Board</p>
-                            <h1 className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">Shape your job hunt<br />around signal, not noise.</h1>
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="rounded-2xl border border-[#333742] bg-[#1e2129]/50 p-4 min-w-[120px]">
-                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#94a3b8]"><BarChart3 className="h-3.5 w-3.5" /> Loaded</div>
-                                <div className="mt-2 text-2xl font-bold">{jobs.length}</div>
+                            <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                                Live feed
                             </div>
-
-                            {/* Clickable Saved Box triggers the Drawer */}
-                            <div
-                                className="rounded-2xl border border-[#333742] bg-[#1e2129]/50 p-4 min-w-[120px] cursor-pointer transition-all hover:bg-[#1e2129] hover:border-[#00e5ff]/50 hover:shadow-lg hover:shadow-[#00e5ff]/10"
-                                onClick={() => setIsSavedDrawerOpen(true)}
-                            >
-                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#00e5ff]"><Compass className="h-3.5 w-3.5" /> Saved</div>
-                                <div className="mt-2 text-2xl font-bold text-[#00e5ff]">{savedJobs.length}</div>
+                            <h1 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
+                                Find your next role
+                            </h1>
+                            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
+                                Aggregated across {JOB_SOURCES.length}+ sources. Upload a resume to
+                                unlock match scores and role-tailored suggestions.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 sm:min-w-[340px]">
+                            <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                                    Live roles
+                                </div>
+                                <div className="mt-2 text-2xl font-semibold">{jobs.length}</div>
+                            </div>
+                            <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                                    Recommended
+                                </div>
+                                <div className="mt-2 text-2xl font-semibold">{recommendedJobs.length}</div>
+                            </div>
+                            <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                                    Resume
+                                </div>
+                                <div className="mt-2 text-sm font-semibold">
+                                    {resumeReady ? 'Connected' : 'Not uploaded'}
+                                </div>
+                            </div>
+                            <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                                    Saved
+                                </div>
+                                <div className="mt-2 text-2xl font-semibold">{savedJobs.length}</div>
                             </div>
                         </div>
                     </div>
-                </header>
 
-                <div className="grid gap-8 xl:grid-cols-[1fr_360px] 2xl:grid-cols-[1fr_400px]">
-                    <main className="space-y-6">
-                        <FilterBar filters={filters} setFilters={setFilters} />
+                    {/* Filter bar */}
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                            <input
+                                type="text"
+                                placeholder="Title or keyword"
+                                value={q}
+                                onChange={(e) => updateParam('q', e.target.value)}
+                                className="w-full rounded-full border border-[#333742] bg-white/[0.03] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-[#00e5ff]/40 focus:outline-none"
+                            />
+                        </div>
+                        <div className="relative">
+                            <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                            <input
+                                type="text"
+                                placeholder="Location"
+                                value={location}
+                                onChange={(e) => updateParam('location', e.target.value)}
+                                className="w-full rounded-full border border-[#333742] bg-white/[0.03] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-[#00e5ff]/40 focus:outline-none"
+                            />
+                        </div>
+                        <select
+                            value={source}
+                            onChange={(e) => updateParam('source', e.target.value)}
+                            className="rounded-full border border-[#333742] bg-[#14171f] px-4 py-2.5 text-sm text-white focus:border-[#00e5ff]/40 focus:outline-none"
+                        >
+                            <option value="" style={{ backgroundColor: '#14171f', color: 'white' }}>All sources</option>
+                            {JOB_SOURCES.map((s) => (
+                                <option key={s.value} value={s.value} style={{ backgroundColor: '#14171f', color: 'white' }}>
+                                    {s.label}
+                                </option>
+                            ))}
+                        </select>
+                        <label className="flex items-center gap-3 rounded-full border border-[#333742] bg-white/[0.03] px-4 py-2.5 text-sm text-white cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={remote}
+                                onChange={(e) => updateParam('remote', e.target.checked ? 'true' : '')}
+                                className="accent-[#00e5ff]"
+                            />
+                            Remote only
+                        </label>
+                    </div>
+                </section>
 
-                        {isLoading ? (
-                            <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#94a3b8]" /></div>
+                {/* Recommended carousel */}
+                {(recommendedJobs.length > 0 || recommendedQuery.isLoading) && (
+                    <section className="mb-8 space-y-3">
+                        <div className="flex items-end justify-between gap-4 px-1">
+                            <div>
+                                <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                                    Featured stream
+                                </div>
+                                <h2 className="mt-2 text-2xl font-semibold">Roles worth opening first</h2>
+                            </div>
+                        </div>
+                        <RecommendedCarousel
+                            jobs={recommendedJobs}
+                            isLoading={recommendedQuery.isLoading}
+                            onJobClick={handleDetails}
+                            isJobSaved={isJobSaved}
+                            onToggleSaved={toggleSaved}
+                        />
+                    </section>
+                )}
+
+                {/* Error state */}
+                {jobsQuery.isError && (
+                    <div className="mb-6 rounded-[1.5rem] border border-red-400/30 bg-red-400/10 p-5">
+                        <div className="font-semibold text-red-200">Failed to load jobs</div>
+                        <div className="mt-1 text-sm text-red-200/80">
+                            {jobsQuery.error?.message || 'Unknown error'}
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => jobsQuery.refetch()} className="mt-3">
+                            Retry
+                        </Button>
+                    </div>
+                )}
+
+                {/* Main feed: grid on desktop, swipe on mobile */}
+                <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+                    <main>
+                        {isMobile ? (
+                            <JobCardStack
+                                jobs={jobs}
+                                index={swipeIndex}
+                                onAdvance={() => setSwipeIndex((v) => v + 1)}
+                                onSave={toggleSaved}
+                                onToggleSaved={toggleSaved}
+                                onDismiss={() => { /* no-op */ }}
+                                onDetails={handleDetails}
+                                isJobSaved={isJobSaved}
+                                isFetchingNextPage={jobsQuery.isFetchingNextPage || jobsQuery.isLoading}
+                            />
+                        ) : jobsQuery.isLoading ? (
+                            <div className="flex h-64 items-center justify-center">
+                                <Loader2 className="h-8 w-8 animate-spin text-[#94a3b8]" />
+                            </div>
                         ) : jobs.length === 0 ? (
                             <div className="flex h-64 flex-col items-center justify-center rounded-[2rem] border border-[#333742] bg-[#14171f]/50">
-                                <Briefcase className="h-12 w-12 text-[#94a3b8]/50 mb-4" />
+                                <Briefcase className="mb-4 h-12 w-12 text-[#94a3b8]/50" />
                                 <h3 className="text-xl font-semibold">No jobs found</h3>
-                                <p className="text-[#94a3b8] mt-2">Adjust your filters to see more results.</p>
+                                <p className="mt-2 text-[#94a3b8]">Adjust your filters to see more.</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-                                {jobs.map((job) => (
-                                    <JobCard
-                                        key={job.id}
-                                        job={job}
-                                        saved={isJobSaved(job)}
-                                        onToggleSaved={toggleSaved}
-                                        onOptimizeRole={handleOptimize}
-                                        resumeReady={resumeReady}
-                                        onClick={handleDetails}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                            <>
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                                    <AnimatePresence>
+                                        {jobs.map((job) => (
+                                            <JobCard
+                                                key={job.id}
+                                                job={job}
+                                                saved={isJobSaved(job)}
+                                                onToggleSaved={toggleSaved}
+                                                onOptimizeRole={handleOptimize}
+                                                resumeReady={resumeReady}
+                                                onClick={handleDetails}
+                                                matchScore={matchById[job.id]}
+                                                matchScoreLoading={matchLoadingById[job.id]}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
 
-                        {hasNextPage && (
-                            <div className="flex justify-center pt-8">
-                                <Button size="lg" variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="shadow-lg shadow-black/20">
-                                    {isFetchingNextPage ? <Loader2 className="mr-2 h-5 w-5 animate-spin text-[#00e5ff]" /> : <ChevronUp className="mr-2 h-5 w-5 rotate-180 text-[#00e5ff]" />}
-                                    {isFetchingNextPage ? 'Loading...' : 'Load More Jobs'}
-                                </Button>
-                            </div>
+                                {jobsQuery.hasNextPage && (
+                                    <div className="mt-8 flex justify-center">
+                                        <Button
+                                            size="lg"
+                                            variant="outline"
+                                            onClick={() => jobsQuery.fetchNextPage()}
+                                            disabled={jobsQuery.isFetchingNextPage}
+                                        >
+                                            {jobsQuery.isFetchingNextPage ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-[#00e5ff]" />
+                                                    Loading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ChevronDown className="mr-2 h-5 w-5" />
+                                                    Load more
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </main>
 
-                    <aside className="hidden xl:block xl:sticky xl:top-8 xl:h-[calc(100vh-4rem)]">
+                    <aside className="hidden xl:block xl:sticky xl:top-24 xl:h-fit">
                         <ResumeLabPanel
-                            resumeFileName={guestResume.fileName}
-                            resumeText={guestResume.text}
-                            critiqueLevel={critiqueLevel}
-                            onCritiqueLevelChange={setCritiqueLevel}
+                            resumeFileName={resumeFile.fileName}
+                            matchProfile={matchProfile}
                             onUpload={handleUpload}
-                            onClear={() => { setGuestResume({ fileName: null, text: '' }); setResumeAnalysis(null); }}
+                            onClear={handleClearResume}
                             onAnalyze={handleAnalyze}
-                            isExtracting={isExtracting}
+                            isUploading={isUploading}
                             isAnalyzing={isAnalyzing}
                             analysis={resumeAnalysis}
                             error={resumeError}
@@ -979,7 +1652,6 @@ function JobsPage() {
                 </div>
             </div>
 
-            {/* Detail Dialog */}
             <JobDetailDialog
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
@@ -988,18 +1660,22 @@ function JobsPage() {
                 onToggleSaved={toggleSaved}
                 onOptimizeRole={handleOptimize}
                 resumeReady={resumeReady}
-                aiSummary={selectedJob ? jobSummaryById[selectedJob.id] : null}
+                matchScore={selectedJob ? matchById[selectedJob.id] : null}
+                matchScoreLoading={selectedJob ? matchLoadingById[selectedJob.id] : false}
+                aiSummary={selectedJob ? summaryById[selectedJob.id] : null}
                 aiSummaryLoading={selectedJob ? summaryLoadingById[selectedJob.id] : false}
-                optimization={selectedJob ? jobOptimizationById[selectedJob.id] : null}
+                optimization={selectedJob ? optimizationById[selectedJob.id] : null}
                 optimizationLoading={selectedJob ? optimizationLoadingById[selectedJob.id] : false}
             />
 
-            {/* Slide-in Saved Jobs Drawer */}
             <SavedJobsDrawer
                 isOpen={isSavedDrawerOpen}
                 onClose={() => setIsSavedDrawerOpen(false)}
                 savedJobs={savedJobs}
-                onSelectJob={handleDetails}
+                onSelectJob={(job) => {
+                    setIsSavedDrawerOpen(false);
+                    handleDetails(job);
+                }}
                 onRemove={unsaveJob}
                 onClearAll={clearAll}
             />
@@ -1007,16 +1683,20 @@ function JobsPage() {
     );
 }
 
+/* -------------------------------------------------------------------------
+ *  Exported wrapper with QueryClient
+ * ---------------------------------------------------------------------- */
+
 const queryClient = new QueryClient({
-    defaultOptions: { queries: { staleTime: Infinity, refetchOnWindowFocus: false, retry: 1 } }
+    defaultOptions: {
+        queries: { staleTime: Infinity, refetchOnWindowFocus: false, retry: 1 },
+    },
 });
 
-const JobBoard = () => {
+export default function JobBoard() {
     return (
         <QueryClientProvider client={queryClient}>
             <JobsPage />
         </QueryClientProvider>
     );
-};
-
-export default JobBoard;
+}

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useResume } from '../../context/ResumeContext';
 import { getGuestId } from '../../utils/guestSession';
 import { useAuth } from '../../context/AuthContext';
+import { toTitleCase, cleanDateString, extractSummaryText } from '../../utils/resumeTextCleaner';
 
 const CreateResumeModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
@@ -142,12 +143,12 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const experiencesData = (parsedResult.experiences || []).map(exp => ({
                 ...initialExperiences()[0],
                 id: Date.now() + Math.random(),
-                role: exp.title || exp.role || '',
-                company: exp.company || '',
-                startDate: exp.startDate || exp.start_date || '',
-                endDate: exp.endDate || exp.end_date || '',
+                role: toTitleCase(exp.title || exp.role || ''),
+                company: toTitleCase(exp.company || ''),
+                startDate: cleanDateString(exp.startDate || exp.start_date || ''),
+                endDate: cleanDateString(exp.endDate || exp.end_date || ''),
                 isCurrent: exp.is_current || exp.isCurrent || (String(exp.endDate || '').toLowerCase() === 'present'),
-                location: exp.location || '',
+                location: toTitleCase(exp.location || ''),
                 bullets: exp.bullets || exp.description || '',
                 aiUsesLeft: 3
             }));
@@ -156,13 +157,13 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const educationsData = (parsedResult.educations || []).map(edu => ({
                 ...initialEducations()[0],
                 id: Date.now() + Math.random(),
-                degree: edu.degree || '',
-                school: edu.school || '',
-                startDate: edu.startDate || edu.start_date || '',
-                endDate: edu.endDate || edu.end_date || '',
-                location: edu.location || '',
+                degree: toTitleCase(edu.degree || ''),
+                school: toTitleCase(edu.school || ''),
+                startDate: cleanDateString(edu.startDate || edu.start_date || ''),
+                endDate: cleanDateString(edu.endDate || edu.end_date || ''),
+                location: toTitleCase(edu.location || ''),
                 bullets: edu.bullets || edu.description || '',
-                minor: edu.minor || '',
+                minor: toTitleCase(edu.minor || ''),
                 gpa: edu.gpa || ''
             }));
 
@@ -170,9 +171,9 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const projectsData = (parsedResult.projects || []).map(proj => ({
                 ...initialProjects()[0],
                 id: Date.now() + Math.random(),
-                name: proj.name || '',
-                organization: proj.organization || '', // Ensure this exists
-                date: proj.date || '',
+                name: toTitleCase(proj.name || ''),
+                organization: toTitleCase(proj.organization || ''), // Ensure this exists
+                date: cleanDateString(proj.date || ''),
                 relevance: proj.relevance || proj.description || ''
             }));
 
@@ -180,9 +181,9 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const certificationsData = (parsedResult.certifications || []).map(cert => ({
                 ...initialCertifications()[0],
                 id: Date.now() + Math.random(),
-                name: cert.name || '',
-                organization: cert.organization || cert.orginization || '',
-                date: cert.date || '',
+                name: toTitleCase(cert.name || ''),
+                organization: toTitleCase(cert.organization || cert.orginization || ''),
+                date: cleanDateString(cert.date || ''),
                 relevance: cert.relevance || cert.description || ''
             }));
 
@@ -190,11 +191,14 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
             const awardsData = (parsedResult.awards || []).map(award => ({
                 ...initialAwards()[0],
                 id: Date.now() + Math.random(),
-                name: award.name || '',
-                organization: award.organization || award.orginization || '',
-                date: award.date || '',
+                name: toTitleCase(award.name || ''),
+                organization: toTitleCase(award.organization || award.orginization || ''),
+                date: cleanDateString(award.date || ''),
                 relevance: award.relevance || award.description || ''
             }));
+
+            // I. Summary — robust extraction handles string / array / nested object.
+            const summaryText = extractSummaryText(parsedResult);
 
             // 3. CREATE RESUME ENTRY IN DB
             const guestId = !user ? getGuestId() : null;
@@ -218,7 +222,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
                     resume_id: createResult.resume_id,
                     contact: contactData,
                     skills: skillsData,
-                    summary: parsedResult.summary || '',
+                    summary: summaryText,
                     experiences: experiencesData,
                     educations: educationsData,
                     projects: projectsData,
@@ -245,7 +249,7 @@ const CreateResumeModal = ({ isOpen, onClose }) => {
 
                 // 5. UPDATE FRONTEND CONTEXT (Only if DB save worked!)
                 setContact(contactData);
-                setSummary(parsedResult.summary || '');
+                setSummary(summaryText);
                 setSkills(skillsData);
                 setExperiences(experiencesData.length > 0 ? experiencesData : initialExperiences());
                 setEducations(educationsData.length > 0 ? educationsData : initialEducations());

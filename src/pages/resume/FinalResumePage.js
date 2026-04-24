@@ -17,6 +17,8 @@ import {
     extractClosestEdge
 } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 import html2canvas from 'html2canvas';
+import { softBreakLongTokens } from '../../utils/resumeTextCleaner';
+import { registerSourceSerif, SOURCE_SERIF_FONT_NAME } from '../../utils/sourceSerifFont';
 // --- Helper Component for Page Layout ---
 const ResumePage = ({ children, pageNumber, totalPages, height = '8in' }) => (
     <div className="bg-white text-black font-serif shadow-lg my-4 relative transition-transform origin-top scale-[0.6] sm:scale-[0.7]md:scale-[0.8] xl:scale-95" style={{ width: '8.5in', minHeight: height, padding: '0.5in' }}>
@@ -333,7 +335,8 @@ const FinalResumePage = () => {
             return;
         }
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
-        doc.setFont('times');
+        registerSourceSerif(doc);
+        doc.setFont(SOURCE_SERIF_FONT_NAME);
 
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -341,14 +344,21 @@ const FinalResumePage = () => {
         const contentWidth = pageWidth - margin * 2;
         let y = margin;
 
-        const FONT_SIZE_BODY = 10;
-        const FONT_SIZE_HEADER = 11;
-        const FONT_SIZE_NAME = 17;
-        const LINE_SPACING = 1.15;
-        const PARAGRAPH_SPACING = 3;
+        const FONT_SIZE_BODY = 8;
+        const FONT_SIZE_HEADER = 10;
+        const FONT_SIZE_NAME = 14;
+        const FONT_SIZE_CONTACT = 8;
+        // Tailwind's leading-normal is ~1.5. Preview text-xs (12px) at that
+        // leading gives ~4.76mm/line; 1.35 gets us close without wasting space.
+        const LINE_SPACING = 1.35;
+        // Trailing gap after each content block — matches the preview's mb-2 (~2.1mm).
+        const PARAGRAPH_SPACING = 2;
+        // Additional gap placed before each section header — matches the
+        // preview's mt-4 (~4.2mm). This is the main source of the roomy feel.
+        const SECTION_HEADER_TOP_GAP = 4;
 
-        const LINE_HEIGHT_BODY = FONT_SIZE_BODY * 0.35 * LINE_SPACING;
-        const LINE_HEIGHT_HEADER = FONT_SIZE_HEADER * 0.35 * LINE_SPACING;
+        const LINE_HEIGHT_BODY = FONT_SIZE_BODY * 0.3528 * LINE_SPACING;
+        const LINE_HEIGHT_HEADER = FONT_SIZE_HEADER * 0.3528 * LINE_SPACING;
 
         const checkPageBreak = (neededHeight) => {
             if (y + neededHeight > pageHeight - margin) {
@@ -357,14 +367,27 @@ const FinalResumePage = () => {
             }
         };
 
-        // --- PDF Header ---
-        doc.setFont('times', 'bold');
-        doc.setFontSize(FONT_SIZE_NAME);
-        doc.text(contact.fullName || "Your Name", pageWidth / 2, y, { align: 'center' });
-        y += (doc.getTextDimensions(contact.fullName || ' ').h) + 2;
+        // jsPDF's splitTextToSize only breaks on whitespace. If a single token
+        // (long URL, email, unbroken concatenation) is wider than the line,
+        // it overflows the margin. Pre-break such tokens at ~60 characters so
+        // splitTextToSize has a break opportunity to land on.
+        const splitSafe = (text, width) => {
+            const prepared = softBreakLongTokens(text || '', 60, ' ');
+            return doc.splitTextToSize(prepared, width);
+        };
 
-        doc.setFont('times', 'normal');
-        doc.setFontSize(FONT_SIZE_BODY);
+        // --- PDF Header ---
+        doc.setFont(SOURCE_SERIF_FONT_NAME, 'bold');
+        doc.setFontSize(FONT_SIZE_NAME);
+        // Match the preview's tracking-wider (~0.05em) — a light touch, not 0.4mm.
+        doc.setCharSpace(0.15);
+        doc.text(contact.fullName || "Your Name", pageWidth / 2, y, { align: 'center' });
+        doc.setCharSpace(0);
+        // Tight gap below name baseline to next line.
+        y += FONT_SIZE_NAME * 0.3528 + 1;
+
+        doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
+        doc.setFontSize(FONT_SIZE_CONTACT);
 
         const locationString = [contactToggles.city && contact.city, contactToggles.state && contact.state, contactToggles.country && contact.country].filter(Boolean).join(', ');
         const contactLine = [
@@ -372,58 +395,109 @@ const FinalResumePage = () => {
             contact.email,
             contactToggles.phone ? contact.phone : '',
             (contactToggles.linkedin && contact.linkedin) ? `linkedin.com/in/${contact.linkedin}` : ''
-        ].filter(Boolean).join('   |   ');
+        ].filter(Boolean).join('  |  ');
 
         doc.text(contactLine, pageWidth / 2, y, { align: 'center' });
-        y += 8; // Spacing after contact info
+        y += 6; // Spacing after contact info (was 8)
 
         // --- Loop through GRANULAR items for PDF ---
-        orderedSections.forEach(item => {
+        orderedSections.forEach((item, itemIdx) => {
             if (item.type === 'header') {
-                checkPageBreak(15);
-                y += 2;
-                doc.setFont('times', 'bold');
+                // Estimate the height needed for the header AND the first
+                // content item below it, so the header doesn't orphan at
+                // the bottom of a page. We look ahead at the next item.
+                const nextItem = orderedSections[itemIdx + 1];
+                let firstContentHeight = LINE_HEIGHT_BODY * 2;
+                if (nextItem) {
+                    if (nextItem.type === 'experience-item' || nextItem.type === 'education-item') {
+                        firstContentHeight = LINE_HEIGHT_BODY * 3; // two header lines + first bullet
+                    } else if (nextItem.type === 'skills-content') {
+                        // first line of skills
+                        firstContentHeight = LINE_HEIGHT_BODY * 2;
+                    }
+                }
+                checkPageBreak(LINE_HEIGHT_HEADER + 5 + firstContentHeight);
+
+                // Preview uses mt-4 (~4.2mm) above each section header.
+                y += SECTION_HEADER_TOP_GAP;
+                doc.setFont(SOURCE_SERIF_FONT_NAME, 'bold');
                 doc.setFontSize(FONT_SIZE_HEADER);
+                // Subtle tracking for the uppercase look, not stretched.
+                doc.setCharSpace(0.15);
                 doc.text(item.title.toUpperCase(), margin, y);
-                y += 1.5;
-                doc.setLineWidth(0.1);
+                doc.setCharSpace(0);
+                // Clear the header text's descenders before drawing the underline,
+                // otherwise the line visually fuses with the letters.
+                y += 2.5;
+                // Match the preview's border-b border-black.
+                doc.setLineWidth(0.3);
+                doc.setDrawColor(0, 0, 0);
                 doc.line(margin, y, pageWidth - margin, y);
+                // Leave enough room for the next body line's ascender so the text
+                // doesn't sit right on top of the rule.
                 y += 5;
             } else {
                 // Content Items
-                doc.setFont('times', 'normal');
+                doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
                 doc.setFontSize(FONT_SIZE_BODY);
 
-                if (item.type === 'summary-content' || item.type === 'skills-content') {
-                    const lines = doc.splitTextToSize(item.content || '', contentWidth);
-                    checkPageBreak(lines.length * LINE_HEIGHT_BODY);
-                    doc.text(lines, margin, y);
-                    y += lines.length * LINE_HEIGHT_BODY + PARAGRAPH_SPACING;
+                if (item.type === 'summary-content') {
+                    // Preserve explicit line breaks in the summary text
+                    // (whitespace-pre-wrap in the preview).
+                    const paragraphs = (item.content || '').split('\n');
+                    paragraphs.forEach(p => {
+                        if (!p.trim()) {
+                            y += LINE_HEIGHT_BODY * 0.5;
+                            return;
+                        }
+                        const lines = splitSafe(p, contentWidth);
+                        checkPageBreak(lines.length * LINE_HEIGHT_BODY);
+                        doc.text(lines, margin, y);
+                        y += lines.length * LINE_HEIGHT_BODY;
+                    });
+                    y += PARAGRAPH_SPACING;
+
+                } else if (item.type === 'skills-content') {
+                    // Preview renders skills as a <ul> with one bullet per line.
+                    // Match that in PDF instead of flattening to a paragraph.
+                    const bullets = (item.content || '')
+                        .split('\n')
+                        .map(b => b.trim().replace(/^•\s*/, ''))
+                        .filter(Boolean);
+                    bullets.forEach(b => {
+                        const bLines = splitSafe(b, contentWidth - 5);
+                        checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
+                        doc.text('•', margin + 2, y);
+                        doc.text(bLines, margin + 5, y);
+                        y += bLines.length * LINE_HEIGHT_BODY;
+                    });
+                    y += PARAGRAPH_SPACING;
 
                 } else if (item.type === 'experience-item') {
                     const exp = item.data;
                     const dates = [exp.startDate, exp.endDate].filter(Boolean).join(' – ');
 
-                    // Role & Date
-                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
-                    doc.setFont('times', 'bold');
-                    doc.text(exp.role || '', margin, y);
-                    doc.setFont('times', 'normal');
+                    // Keep role + company + first bullet together across a page break
+                    // so the title never orphans above its bullets.
+                    checkPageBreak(LINE_HEIGHT_BODY * 3 + PARAGRAPH_SPACING);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'bold');
+                    doc.text(softBreakLongTokens(exp.role || '', 60), margin, y);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
                     doc.text(dates, pageWidth - margin, y, { align: 'right' });
                     y += LINE_HEIGHT_BODY;
 
                     // Company & Location
-                    doc.setFont('times', 'italic');
-                    doc.text(exp.company || '', margin, y);
-                    doc.setFont('times', 'normal');
-                    doc.text(exp.location || '', pageWidth - margin, y, { align: 'right' });
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'italic');
+                    doc.text(softBreakLongTokens(exp.company || '', 60), margin, y);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
+                    doc.text(softBreakLongTokens(exp.location || '', 60), pageWidth - margin, y, { align: 'right' });
                     y += LINE_HEIGHT_BODY;
 
                     // Bullets
                     if (exp.bullets) {
                         const bullets = exp.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bullets.forEach(b => {
-                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            const bLines = splitSafe(b, contentWidth - 5);
                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
                             doc.text('•', margin + 2, y);
                             doc.text(bLines, margin + 5, y);
@@ -437,23 +511,23 @@ const FinalResumePage = () => {
                     const dates = [edu.startDate, edu.endDate].filter(Boolean).join(' – ');
                     const degreeLine = [edu.degree, edu.minor].filter(Boolean).join(', ');
 
-                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
-                    doc.setFont('times', 'bold');
-                    doc.text(edu.school || '', margin, y);
-                    doc.setFont('times', 'normal');
+                    checkPageBreak(LINE_HEIGHT_BODY * 3 + PARAGRAPH_SPACING);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'bold');
+                    doc.text(softBreakLongTokens(edu.school || '', 60), margin, y);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
                     doc.text(dates, pageWidth - margin, y, { align: 'right' });
                     y += LINE_HEIGHT_BODY;
 
-                    doc.setFont('times', 'italic');
-                    doc.text(degreeLine + (edu.gpa ? ` | GPA: ${edu.gpa}` : ''), margin, y);
-                    doc.setFont('times', 'normal');
-                    doc.text(edu.location || '', pageWidth - margin, y, { align: 'right' });
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'italic');
+                    doc.text(softBreakLongTokens(degreeLine + (edu.gpa ? ` | GPA: ${edu.gpa}` : ''), 60), margin, y);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
+                    doc.text(softBreakLongTokens(edu.location || '', 60), pageWidth - margin, y, { align: 'right' });
                     y += LINE_HEIGHT_BODY;
 
                     if (edu.bullets) {
                         const bullets = edu.bullets.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bullets.forEach(b => {
-                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            const bLines = splitSafe(b, contentWidth - 5);
                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
                             doc.text('•', margin + 2, y);
                             doc.text(bLines, margin + 5, y);
@@ -467,24 +541,28 @@ const FinalResumePage = () => {
                     const name = data.name + (data.organization ? `, ${data.organization}` : '');
                     const desc = data.relevance || '';
 
-                    checkPageBreak(LINE_HEIGHT_BODY + PARAGRAPH_SPACING);
-                    doc.setFont('times', 'bold');
-                    doc.text(name, margin, y);
-                    doc.setFont('times', 'normal');
+                    checkPageBreak(LINE_HEIGHT_BODY * 2 + PARAGRAPH_SPACING);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'bold');
+                    doc.text(softBreakLongTokens(name, 60), margin, y);
+                    doc.setFont(SOURCE_SERIF_FONT_NAME, 'normal');
                     doc.text(data.date || '', pageWidth - margin, y, { align: 'right' });
                     y += LINE_HEIGHT_BODY;
 
                     if (desc) {
                         const bullets = desc.split('\n').map(b => b.trim().replace(/^•\s*/, '')).filter(Boolean);
                         bullets.forEach(b => {
-                            const bLines = doc.splitTextToSize(b, contentWidth - 5);
+                            const bLines = splitSafe(b, contentWidth - 5);
                             checkPageBreak(bLines.length * LINE_HEIGHT_BODY);
                             doc.text('•', margin + 2, y);
                             doc.text(bLines, margin + 5, y);
                             y += bLines.length * LINE_HEIGHT_BODY;
                         });
+                        y += PARAGRAPH_SPACING;
+                    } else {
+                        // Single-line item (e.g. a cert with no description) —
+                        // use a tight gap so cert lists don't feel sparse.
+                        y += 1;
                     }
-                    y += PARAGRAPH_SPACING;
                 }
             }
         });
@@ -503,15 +581,15 @@ const FinalResumePage = () => {
             const exp = section.data;
             return (
                 <div className={itemClass}>
-                    <div className="flex justify-between items-baseline">
-                        <h3 className="text-sm font-bold text-gray-900">{exp.role}</h3>
-                        <p className="text-xs font-normal text-gray-700">{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</p>
+                    <div className="flex justify-between items-baseline gap-2">
+                        <h3 className="text-sm font-bold text-gray-900 break-words min-w-0">{exp.role}</h3>
+                        <p className="text-xs font-normal text-gray-700 flex-shrink-0 whitespace-nowrap">{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</p>
                     </div>
-                    <div className="flex justify-between items-baseline">
-                        <p className="text-xs italic text-gray-800">{exp.company}</p>
-                        <p className="text-xs font-normal text-gray-700">{exp.location}</p>
+                    <div className="flex justify-between items-baseline gap-2">
+                        <p className="text-xs italic text-gray-800 break-words min-w-0">{exp.company}</p>
+                        <p className="text-xs font-normal text-gray-700 flex-shrink-0">{exp.location}</p>
                     </div>
-                    <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
+                    <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal break-words">
                         {(exp.bullets || '').split('\n').map((line, i) => {
                             const c = line.trim().replace(/^•\s*/, '');
                             return c && <li key={i}>{c}</li>;
@@ -525,16 +603,16 @@ const FinalResumePage = () => {
             const edu = section.data;
             return (
                 <div className={itemClass}>
-                    <div className="flex justify-between items-baseline">
-                        <h3 className="text-sm font-bold text-gray-900">{edu.school}</h3>
-                        <p className="text-xs font-normal text-gray-700">{edu.startDate}{edu.endDate ? ` – ${edu.endDate}` : ''}</p>
+                    <div className="flex justify-between items-baseline gap-2">
+                        <h3 className="text-sm font-bold text-gray-900 break-words min-w-0">{edu.school}</h3>
+                        <p className="text-xs font-normal text-gray-700 flex-shrink-0 whitespace-nowrap">{edu.startDate}{edu.endDate ? ` – ${edu.endDate}` : ''}</p>
                     </div>
-                    <div className="flex justify-between items-baseline">
-                        <p className="text-xs italic text-gray-800">{edu.degree}{edu.minor ? `, ${edu.minor}` : ''}</p>
-                        <p className="text-xs font-normal text-gray-700">{edu.location}</p>
+                    <div className="flex justify-between items-baseline gap-2">
+                        <p className="text-xs italic text-gray-800 break-words min-w-0">{edu.degree}{edu.minor ? `, ${edu.minor}` : ''}</p>
+                        <p className="text-xs font-normal text-gray-700 flex-shrink-0">{edu.location}</p>
                     </div>
                     {edu.bullets && (
-                        <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
+                        <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal break-words">
                             {edu.bullets.split('\n').map((line, i) => {
                                 const c = line.trim().replace(/^•\s*/, '');
                                 return c && <li key={i}>{c}</li>;
@@ -550,11 +628,11 @@ const FinalResumePage = () => {
             const desc = item.relevance || '';
             return (
                 <div className={itemClass}>
-                    <div className="flex justify-between items-baseline">
-                        <h3 className="text-xs font-bold text-gray-900">{item.name}{item.organization ? `, ${item.organization}` : ''}</h3>
-                        {item.date && <p className="text-xs font-normal text-gray-700">{item.date}</p>}
+                    <div className="flex justify-between items-baseline gap-2">
+                        <h3 className="text-xs font-bold text-gray-900 break-words min-w-0">{item.name}{item.organization ? `, ${item.organization}` : ''}</h3>
+                        {item.date && <p className="text-xs font-normal text-gray-700 flex-shrink-0 whitespace-nowrap">{item.date}</p>}
                     </div>
-                    <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal">
+                    <ul className="mt-1 text-xs text-gray-800 list-disc pl-5 space-y-1 leading-normal break-words">
                         {desc.split('\n').map((line, i) => {
                             const c = line.trim().replace(/^•\s*/, '');
                             return c && <li key={i}>{c}</li>;

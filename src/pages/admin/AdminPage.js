@@ -718,8 +718,8 @@ const AdminPage = () => {
     // Filter requirements based on type
     const step1Contracts = assignedRequirements.filter(req => req.document_type === 'contract');
     const step2Requirements = assignedRequirements.filter(req => req.document_type === 'other');
-    // Only clients are eligible for status/requirement management
-    const clientUsers = usersList.filter(u => u.role === 'client');
+    // Only clients (role_id = 3) are eligible for status/requirement management
+    const clientUsers = usersList.filter(u => Number(u.role_id) === 3);
     // Filter notes for the currently selected user's step
     const notesForCurrentStep = stepNotesList.filter(note => note.step_number === selectedUserCurrentStep);
     // --- End Helper variables ---

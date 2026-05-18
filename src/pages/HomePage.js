@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import LatestRoles from '../components/home/LatestRoles'; // Make sure this path matches your folder structure
-import { useNavigate } from 'react-router-dom';
-import HowItWorks from '../components/home/HowItWorks';    // ← add
+import { Link, useNavigate } from 'react-router-dom';
+import LatestRoles from '../components/home/LatestRoles';
+import HowItWorks from '../components/home/HowItWorks';
 import FAQ from '../components/home/FAQ';
-const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 }) => {
+
+const AnimatedCounter = ({ target, duration = 2000, suffix = '', decimals = 0 }) => {
     const [count, setCount] = useState(0);
 
     useEffect(() => {
@@ -12,14 +12,9 @@ const AnimatedCounter = ({ target, duration = 2000, suffix = "", decimals = 0 })
         const step = (timestamp) => {
             if (!startTimestamp) startTimestamp = timestamp;
             const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-
-            // Cubic ease-out for smooth finish
             const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-            // Use toFixed to maintain decimal precision
             const currentCount = (easedProgress * target).toFixed(decimals);
             setCount(currentCount);
-
             if (progress < 1) {
                 window.requestAnimationFrame(step);
             }
@@ -36,12 +31,10 @@ const HomePage = () => {
 
     const handleJobSearch = () => {
         const trimmed = jobQuery.trim();
-
         if (!trimmed) {
             navigate('/job_board');
             return;
         }
-
         navigate(`/job_board?q=${encodeURIComponent(trimmed)}`);
     };
 
@@ -50,6 +43,7 @@ const HomePage = () => {
             handleJobSearch();
         }
     };
+
     return (
         <div className="min-h-screen text-white font-sans">
             {/* subtle teal glow at the top */}
@@ -61,13 +55,17 @@ const HomePage = () => {
                         'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(6,182,212,0.08), transparent 70%)',
                 }}
             />
+
             {/* --- HERO SECTION --- */}
-            <section className="py-20 px-6 max-w-5xl mx-auto text-center">
-                <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-10 text-white">
+            <section className="py-24 sm:py-28 px-6 max-w-4xl mx-auto text-center">
+                {/* Headline */}
+                <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1] text-white">
                     Shape the future of work.
                 </h1>
 
-                <div className="flex flex-wrap justify-center gap-10 md:gap-20 mb-16 text-neutral-400">
+
+                {/* Animated stats */}
+                <div className="flex flex-wrap justify-center gap-10 md:gap-20 mt-12 text-neutral-400">
                     <div className="text-center">
                         <span className="block text-white text-3xl md:text-4xl font-semibold mb-1">
                             $<AnimatedCounter target={100} suffix="+" />
@@ -76,7 +74,6 @@ const HomePage = () => {
                             Average pay/hr
                         </p>
                     </div>
-
                     <div className="text-center">
                         <span className="block text-white text-3xl md:text-4xl font-semibold mb-1">
                             <AnimatedCounter target={50000} suffix="+" />
@@ -85,7 +82,6 @@ const HomePage = () => {
                             Optimize Resume
                         </p>
                     </div>
-
                     <div className="text-center">
                         <span className="block text-white text-3xl md:text-4xl font-semibold mb-1">
                             <AnimatedCounter target={1} decimals={1} suffix="M+" />
@@ -96,8 +92,8 @@ const HomePage = () => {
                     </div>
                 </div>
 
-                {/* Simplified Search Input */}
-                <div className="max-w-xl mx-auto mb-10">
+                {/* Search input */}
+                <div className="max-w-xl mx-auto mt-10">
                     <input
                         type="text"
                         value={jobQuery}
@@ -108,21 +104,21 @@ const HomePage = () => {
                     />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                    {/* Search Jobs Button */}
+                {/* CTAs — primary filled, secondary outlined */}
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-8">
+                    {/* Primary: Search Jobs (the hero's main action) */}
                     <button
                         type="button"
                         onClick={handleJobSearch}
-                        className="w-full sm:w-auto bg-white text-black px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-neutral-200 hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
+                        className="w-full sm:w-auto bg-[#06b6d4] text-white px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-[#0891b2] hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
                     >
                         Search Jobs
                     </button>
 
-                    {/* Optimize Resume Button */}
+                    {/* Secondary: Optimize Resume */}
                     <Link
                         to="/resume"
-                        className="w-full sm:w-auto bg-[#06b6d4] text-white px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:bg-[#0891b2] hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(6,182,212,0.6)]"
+                        className="w-full sm:w-auto bg-transparent border border-neutral-700 text-white px-8 py-3 rounded-full font-bold text-sm transition-all duration-300 hover:border-neutral-500 hover:bg-white/[0.04] hover:-translate-y-1"
                     >
                         Optimize Resume
                     </Link>
@@ -131,11 +127,12 @@ const HomePage = () => {
 
             {/* --- LATEST ROLES SECTION --- */}
             <LatestRoles />
+
             {/* --- How it works --- */}
             <HowItWorks />
+
             {/* --- FAQ --- */}
             <FAQ />
-
         </div>
     );
 };

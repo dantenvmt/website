@@ -67,7 +67,13 @@ const JOB_SOURCES = [
     { value: 'CareerOneStop', label: 'CareerOneStop' },
     { value: 'HN RSS', label: 'HN RSS' },
 ];
-
+const EMPLOYMENT_TYPES = [
+    { value: 'Full-time', label: 'Full-time' },
+    { value: 'Part-time', label: 'Part-time' },
+    { value: 'Contract', label: 'Contract' },
+    { value: 'Internship', label: 'Internship' },
+    { value: 'Temporary', label: 'Temporary' },
+];
 /* -------------------------------------------------------------------------
  *  Helpers
  * ---------------------------------------------------------------------- */
@@ -133,7 +139,7 @@ async function apiFetch(path, opts = {}) {
 
 const api = {
     jobs: {
-        list: async ({ pageParam = null, q, location, source, remote }) => {
+        list: async ({ pageParam = null, q, location, source, remote, employmentType }) => {
             const params = new URLSearchParams({
                 limit: String(PAGE_SIZE),
                 active_only: 'false',
@@ -145,6 +151,7 @@ const api = {
             if (location) params.append('location', location);
             if (source) params.append('source', source);
             if (remote) params.append('remote', 'true');
+            if (employmentType) params.append('employment_type', employmentType);
             return apiFetch(`/api/v1/jobs?${params}`);
         },
         recommended: async ({ skills, experienceYears, userId }) => {
@@ -796,10 +803,25 @@ function JobDetailDialog({
     optimization,
     optimizationLoading,
 }) {
-    const cleanDescription = useMemo(() => {
-        if (!job?.description) return '';
-        return DOMPurify.sanitize(job.description);
-    }, [job]);
+const descriptionContent = useMemo(() => {
+    if (!job?.description) return { isHtml: false, text: '' };
+    const raw = job.description;
+
+    // Decode HTML entities (&amp; → &, &gt; → >, etc.) regardless of branch.
+    // This handles the case where the scraper double-encoded or stored entities verbatim.
+    const decoded = (() => {
+        const el = document.createElement('textarea');
+        el.innerHTML = raw;
+        return el.value;
+    })();
+
+    // After decoding, check whether real HTML tags exist.
+    const hasHtml = /<[a-z][\s\S]*?>/i.test(decoded);
+    if (hasHtml) {
+        return { isHtml: true, html: DOMPurify.sanitize(decoded) };
+    }
+    return { isHtml: false, text: decoded };
+}, [job]);
 
     if (!open || !job) return null;
 
@@ -960,10 +982,16 @@ function JobDetailDialog({
                         </div>
                     )}
 
-                    <div
-                        className="prose prose-invert max-w-none prose-sm prose-headings:text-white prose-p:text-white/80 prose-li:text-white/80"
-                        dangerouslySetInnerHTML={{ __html: cleanDescription }}
-                    />
+                    {descriptionContent.isHtml ? (
+    <div
+        className="prose prose-invert max-w-none prose-sm prose-headings:text-white prose-p:text-white/80 prose-li:text-white/80"
+        dangerouslySetInnerHTML={{ __html: descriptionContent.html }}
+    />
+) : (
+    <div className="prose prose-invert max-w-none prose-sm prose-p:text-white/80 whitespace-pre-line">
+        {descriptionContent.text}
+    </div>
+)}
                 </div>
 
                 <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-[#333742] bg-[#0b0e14]/95 p-4 backdrop-blur">
@@ -1212,7 +1240,7 @@ function JobsPage() {
     const location = searchParams.get('location') || '';
     const source = searchParams.get('source') || '';
     const remote = searchParams.get('remote') === 'true';
-
+    const employmentType = searchParams.get('employment_type') || '';
     const updateParam = (key, value) => {
         const next = new URLSearchParams(searchParams);
         if (value) next.set(key, value);
@@ -1260,9 +1288,9 @@ function JobsPage() {
 
     /* ---- main jobs feed (cursor-based infinite scroll) ---- */
     const jobsQuery = useInfiniteQuery({
-        queryKey: ['jobs', { q, location, source, remote }],
+        queryKey: ['jobs', { q, location, source, remote, employmentType }],  // add employmentType
         queryFn: ({ pageParam = null }) =>
-            api.jobs.list({ pageParam, q, location, source, remote }),
+            api.jobs.list({ pageParam, q, location, source, remote, employmentType }),  // add employmentType
         getNextPageParam: (last) => last.next_cursor || null,
         initialPageParam: null,
     });
@@ -1513,7 +1541,19 @@ function JobsPage() {
                     </div>
 
                     {/* Filter bar */}
-                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <select
+                            value={employmentType}
+                            onChange={(e) => updateParam('employment_type', e.target.value)}
+                            className="rounded-full border border-[#333742] bg-[#14171f] px-4 py-2.5 text-sm text-white focus:border-[#00e5ff]/40 focus:outline-none"
+                        >
+                            <option value="" style={{ backgroundColor: '#14171f', color: 'white' }}>All types</option>
+                            {EMPLOYMENT_TYPES.map((t) => (
+                                <option key={t.value} value={t.value} style={{ backgroundColor: '#14171f', color: 'white' }}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                             <input

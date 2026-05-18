@@ -77,7 +77,7 @@ export const ResumeProvider = ({ children }) => {
     const addExperience = useCallback(() => setExperiencesState(prev => [...prev, { id: Date.now(), role: '', company: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', aiUsesLeft: 3 }]), []);
     const addEducation = useCallback(() => setEducationsState(prev => [...prev, { id: Date.now(), degree: '', school: '', startDate: '', endDate: '', isCurrent: false, location: '', bullets: '• ', minor: '', gpa: '' }]), []);
     const addAward = useCallback(() => setAwardsState(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]), []);
-    const addCertificate = useCallback(() => setCertificationsState(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]), []);
+    const addCertification = useCallback(() => setCertificationsState(prev => [...prev, { id: Date.now(), name: '', organization: '', date: '', relevance: '' }]), []);
     const addProject = useCallback(() => setProjectsState(prev => [...prev, { id: Date.now(), name: '', date: '', relevance: '' }]), []);
 
     const resetResume = useCallback(() => {
@@ -147,7 +147,7 @@ export const ResumeProvider = ({ children }) => {
         projects, setProjects,
         jobDescription, setJobDescription,
         aiAnalysis, setAiAnalysis,
-        resetResume, addExperience, addEducation, addAward, addCertificate, addProject,
+        resetResume, addExperience, addEducation, addAward, addCertification, addProject,
         // Export the new function
         reorderSection, 
         
@@ -161,7 +161,7 @@ export const ResumeProvider = ({ children }) => {
     }), [
         contact, contactToggles, summary, skills, experiences, educations, awards, certifications, projects, jobDescription, aiAnalysis,
         setContact, setSummary, setSkills, setExperiences, setEducations, setAwards, setCertifications, setProjects,
-        resetResume, addExperience, addEducation, addAward, addCertificate, addProject,
+        resetResume, addExperience, addEducation, addAward, addCertification, addProject,
         reorderSection // Add to dependency array
     ]);
 
